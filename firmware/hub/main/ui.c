@@ -229,10 +229,10 @@ static void render(void)
     if (s_ui.toast[0] && now < s_ui.toast_until_us) {
         oled_text(0, 6, s_ui.toast, true);
     } else if (s_ui.sel != active && store_pairing(s_ui.sel)) {
-        char hint[22];
+        char hint[26];   /* "> " + 12-char name + "  (click)" + NUL */
         snprintf(hint, sizeof(hint), "> %s  (click)",
                  store_pairing(s_ui.sel)->name);
-        oled_text(0, 6, hint, false);
+        oled_text(0, 6, hint, false);   /* oled_text clips at 21 cols */
     }
 
     /* Slot strip: digit per slot; inverse = active, '.'/'*' = state. */
