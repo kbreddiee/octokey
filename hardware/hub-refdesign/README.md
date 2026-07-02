@@ -62,7 +62,9 @@ USB-C (5V in) ──▶ TP4056 charger ──▶ 18650 cell (holder)
 | U3 | DW01A + U4 FS8205 | SOT-23-6/TSSOP-8 | cell protection (skip if you mandate protected cells — don't) |
 | U5 | TPS61023 | SOT-563 | 5 V boost, 1 A+ from a single cell |
 | U6 | AP2112K-3.3 | SOT-25 | 3V3 LDO from the 5 V rail |
-| J1 | USB-C receptacle, 16-pin (power role only: CC1/CC2 5.1 kΩ to GND) | SMD | charge input |
+| U7 | CH340C | SOP-16 | USB-UART bridge on the USB-C data pins — flash the hub and read logs over USB-C, no buttons needed |
+| Q1, Q2 | S8050 (or 2N3904) | SOT-23 | auto-download circuit (DTR/RTS → EN/IO0, the standard NodeMCU two-transistor arrangement) |
+| J1 | USB-C receptacle, 16-pin (CC1/CC2 5.1 kΩ to GND) | SMD | charge input **+ hub flashing/console** (data pins → U7) |
 | J2 | USB-A receptacle, THT | — | keyboard / receiver port |
 | BT1 | 18650 holder, THT | — | the "battery slot" |
 | F1 | polyfuse 500 mA | 1206 | on J2 VBUS |
@@ -84,19 +86,21 @@ USB-C (5V in) ──▶ TP4056 charger ──▶ 18650 cell (holder)
 | EN | RESET button → GND, 10 kΩ to 3V3 + 1 µF to GND |
 | GPIO1 | battery voltage: cell → 100 kΩ / 100 kΩ divider (future gauge) |
 | GPIO2 | TP4056 /CHRG (open-drain, pull-up) — future "charging" state |
-| GPIO43 / GPIO44 | UART0 TX/RX header pads (logs + fallback flashing) |
+| GPIO43 / GPIO44 | UART0 TX/RX → U7 (CH340C) RXD/TXD |
+| EN / GPIO0 | ← Q1/Q2 auto-download circuit from U7 DTR/RTS |
 
 GPIO4–13 are free non-strapping pins on every WROOM-1 variant including
 octal-PSRAM N16R8; GPIO35–37 are deliberately unused.
 
 ## Flashing
 
-Primary: the ESP32-S3 ROM exposes USB download mode **through the USB-A
-port** (hold BOOT, tap RESET; connect to a PC with a USB A-to-A cable or
-A-to-C adapter). Fallback: the UART0 header pads with any $3 USB-UART
-adapter. After the first flash, `idf.py flash` works over USB without
-touching buttons is *not* available (device role is taken by the keyboard
-port in normal operation) — use UART or the BOOT chord.
+**Over USB-C, hands-free.** The USB-C port's data pins go to a CH340C
+USB-UART bridge wired to UART0 with the standard two-transistor
+auto-download circuit — so the same cable that charges the hub also does
+`idf.py flash monitor` with no button dance, exactly like a devkit. The
+S3's native USB stays dedicated to the USB-A keyboard/provisioning port.
+(Fallback: hold BOOT, tap RESET, and flash via the USB-A port using the
+ROM's USB download mode.)
 
 Firmware build:
 
