@@ -1,0 +1,4 @@
+# Overlay for the espkvm custom-PCB hub (button + slot LEDs, no display):
+#   idf.py -B build_headless -DSDKCONFIG=build_headless/sdkconfig \
+#          -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.headless" build
+CONFIG_ESPKVM_HUB_BOARD_HEADLESS=y

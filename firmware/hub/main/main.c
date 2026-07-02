@@ -42,11 +42,13 @@ void app_main(void)
 
     ESP_ERROR_CHECK(store_init());
 
-    /* OLED is non-fatal: a hub without a display still switches via
-     * hotkeys. */
+#if !CONFIG_ESPKVM_HUB_BOARD_HEADLESS
+    /* Display is non-fatal: a hub without one still switches via
+     * hotkeys and the button. */
     if (oled_init() != ESP_OK) {
-        ESP_LOGW(TAG, "OLED not found — running headless");
+        ESP_LOGW(TAG, "display not found — running blind");
     }
+#endif
 
     ESP_ERROR_CHECK(link_init(ui_post_link_event));
     ESP_ERROR_CHECK(ui_init());

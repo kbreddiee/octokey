@@ -13,6 +13,12 @@ menu "espkvm hub"
             bool "ESP32-S3 DevKitC-1 + SSD1306 OLED + external encoder"
         config ESPKVM_HUB_BOARD_TEMBED
             bool "LILYGO T-Embed (built-in ST7789 + encoder)"
+        config ESPKVM_HUB_BOARD_HEADLESS
+            bool "espkvm custom PCB (button + 10 slot LEDs, no display)"
+            help
+                See hardware/hub-refdesign/. One button cycles/pairs, one
+                LED per slot shows the active machine; per-slot detail is
+                on the dongles' own screens.
     endchoice
 
     config ESPKVM_CHANNEL
@@ -28,20 +34,33 @@ menu "espkvm hub"
             Driven high at boot. The T-Embed gates its display/peripheral
             power (and battery boost) behind GPIO46.
 
-    menu "Rotary encoder"
-        config ESPKVM_ENC_A
-            int "Encoder A GPIO"
-            default 2 if ESPKVM_HUB_BOARD_TEMBED
-            default 4
-        config ESPKVM_ENC_B
-            int "Encoder B GPIO"
-            default 1 if ESPKVM_HUB_BOARD_TEMBED
-            default 5
-        config ESPKVM_ENC_SW
-            int "Encoder push-button GPIO"
-            default 0 if ESPKVM_HUB_BOARD_TEMBED
-            default 6
-    endmenu
+    if !ESPKVM_HUB_BOARD_HEADLESS
+        menu "Rotary encoder"
+            config ESPKVM_ENC_A
+                int "Encoder A GPIO"
+                default 2 if ESPKVM_HUB_BOARD_TEMBED
+                default 4
+            config ESPKVM_ENC_B
+                int "Encoder B GPIO"
+                default 1 if ESPKVM_HUB_BOARD_TEMBED
+                default 5
+            config ESPKVM_ENC_SW
+                int "Encoder push-button GPIO"
+                default 0 if ESPKVM_HUB_BOARD_TEMBED
+                default 6
+        endmenu
+    endif
+
+    if ESPKVM_HUB_BOARD_HEADLESS
+        config ESPKVM_HUB_BTN_GPIO
+            int "Mode button GPIO"
+            default 14
+            help
+                Short press: next slot. Hold 3 s: pairing mode.
+                Triple-click then click: forget the active slot.
+                Slot LED pins are the table in ui_headless.c
+                (GPIO4..13 by default, matching hardware/hub-refdesign).
+    endif
 
     if ESPKVM_HUB_BOARD_DEVKIT
         menu "OLED (SSD1306 128x64 I2C)"

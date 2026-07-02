@@ -32,6 +32,11 @@ jobs:
             chip_family: ESP32-S3
             path: firmware/hub
             sdkconfig_defaults: "sdkconfig.defaults;sdkconfig.tembed"
+          - name: hub-headless # custom PCB: button + slot LEDs
+            target: esp32s3
+            chip_family: ESP32-S3
+            path: firmware/hub
+            sdkconfig_defaults: "sdkconfig.defaults;sdkconfig.headless"
           - name: dongle
             target: esp32s2
             chip_family: ESP32-S2

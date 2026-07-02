@@ -1,11 +1,13 @@
-set(srcs "main.c" "store.c" "link.c" "usb_kbd.c" "input.c" "ui.c")
+set(srcs "main.c" "store.c" "link.c" "usb_kbd.c" "input.c")
 
-# One display backend, same API (oled.h): SSD1306 for the DevKit build,
-# ST7789 for the T-Embed build.
-if(CONFIG_ESPKVM_HUB_BOARD_TEMBED)
-    list(APPEND srcs "disp_st7789.c")
+# One UI per board, same interface (ui.h). Display boards share ui.c with
+# a display backend behind the oled.h API; the custom PCB is button+LEDs.
+if(CONFIG_ESPKVM_HUB_BOARD_HEADLESS)
+    list(APPEND srcs "ui_headless.c")
+elseif(CONFIG_ESPKVM_HUB_BOARD_TEMBED)
+    list(APPEND srcs "ui.c" "disp_st7789.c")
 else()
-    list(APPEND srcs "oled.c")
+    list(APPEND srcs "ui.c" "oled.c")
 endif()
 
 idf_component_register(

@@ -6,9 +6,16 @@ Prices are typical mid-2026 street prices. Both AliExpress (cheap, 1–3 weeks)
 and Amazon (2× the price, tomorrow) carry all of these — search the exact
 terms below.
 
-**Hub, pick one:** the LILYGO T-Embed (option A below — ready-made, cased,
-battery-capable, ~$29 + $8 splitter cable) or the DIY DevKitC-1 stack
-(option B — cheaper, all parts exposed, rows 1/3/4/5/6 below).
+**Hub, pick one:**
+
+- **Custom espkvm hub PCB** — button + 10 slot LEDs, 18650 battery slot,
+  built-in USB-A keyboard port; full fab-ready reference design in
+  [`hardware/hub-refdesign/`](../hardware/hub-refdesign/README.md)
+  (~$10–14/board assembled, 1–2 week fab lead time)
+- LILYGO T-Embed (option A below — ready-made, cased, screen + knob,
+  ~$29 + $8 splitter cable)
+- DIY DevKitC-1 stack (option B — cheapest, all parts exposed, and the
+  recommended bring-up board while custom PCBs are at the fab)
 
 | # | Part | Search term | Qty | ~AliExpress | ~Amazon |
 |---|------|-------------|-----|------------:|--------:|
