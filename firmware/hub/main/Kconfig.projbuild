@@ -1,33 +1,84 @@
 menu "espkvm hub"
 
+    choice ESPKVM_HUB_BOARD
+        prompt "Hub board"
+        default ESPKVM_HUB_BOARD_DEVKIT
+        help
+            DevKit: ESP32-S3 DevKitC-1 with an external SSD1306 I2C OLED
+            and EC11 rotary encoder (see docs/BUILD.md for wiring).
+            T-Embed: LILYGO T-Embed — ST7789 LCD, rotary encoder and
+            battery support all built in; zero wiring.
+
+        config ESPKVM_HUB_BOARD_DEVKIT
+            bool "ESP32-S3 DevKitC-1 + SSD1306 OLED + external encoder"
+        config ESPKVM_HUB_BOARD_TEMBED
+            bool "LILYGO T-Embed (built-in ST7789 + encoder)"
+    endchoice
+
     config ESPKVM_CHANNEL
         int "ESP-NOW Wi-Fi channel (must match the dongles)"
         range 1 13
         default 1
 
-    menu "OLED (SSD1306 128x64 I2C)"
-        config ESPKVM_OLED_SDA
-            int "SDA GPIO"
-            default 8
-        config ESPKVM_OLED_SCL
-            int "SCL GPIO"
-            default 9
-        config ESPKVM_OLED_ADDR
-            hex "I2C address"
-            default 0x3C
-    endmenu
+    config ESPKVM_PWR_EN_GPIO
+        int "Peripheral power-enable GPIO (-1 = none)"
+        default 46 if ESPKVM_HUB_BOARD_TEMBED
+        default -1
+        help
+            Driven high at boot. The T-Embed gates its display/peripheral
+            power (and battery boost) behind GPIO46.
 
     menu "Rotary encoder"
         config ESPKVM_ENC_A
             int "Encoder A GPIO"
+            default 2 if ESPKVM_HUB_BOARD_TEMBED
             default 4
         config ESPKVM_ENC_B
             int "Encoder B GPIO"
+            default 1 if ESPKVM_HUB_BOARD_TEMBED
             default 5
         config ESPKVM_ENC_SW
             int "Encoder push-button GPIO"
+            default 0 if ESPKVM_HUB_BOARD_TEMBED
             default 6
     endmenu
+
+    if ESPKVM_HUB_BOARD_DEVKIT
+        menu "OLED (SSD1306 128x64 I2C)"
+            config ESPKVM_OLED_SDA
+                int "SDA GPIO"
+                default 8
+            config ESPKVM_OLED_SCL
+                int "SCL GPIO"
+                default 9
+            config ESPKVM_OLED_ADDR
+                hex "I2C address"
+                default 0x3C
+        endmenu
+    endif
+
+    if ESPKVM_HUB_BOARD_TEMBED
+        menu "T-Embed LCD (ST7789 320x170)"
+            config ESPKVM_LCD_MOSI
+                int "LCD MOSI GPIO"
+                default 11
+            config ESPKVM_LCD_SCLK
+                int "LCD SCLK GPIO"
+                default 12
+            config ESPKVM_LCD_CS
+                int "LCD CS GPIO"
+                default 10
+            config ESPKVM_LCD_DC
+                int "LCD D/C GPIO"
+                default 13
+            config ESPKVM_LCD_RST
+                int "LCD RESET GPIO"
+                default 9
+            config ESPKVM_LCD_BL
+                int "LCD backlight GPIO (active high)"
+                default 15
+        endmenu
+    endif
 
     menu "Hotkey chord"
         config ESPKVM_HOTKEY_TAP_MS

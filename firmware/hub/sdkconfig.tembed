@@ -1,0 +1,4 @@
+# Overlay for the LILYGO T-Embed hub build:
+#   idf.py -B build_tembed -DSDKCONFIG=build_tembed/sdkconfig \
+#          -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.tembed" build
+CONFIG_ESPKVM_HUB_BOARD_TEMBED=y

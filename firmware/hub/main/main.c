@@ -10,6 +10,7 @@
  */
 
 #include "esp_log.h"
+#include "driver/gpio.h"
 
 #include "store.h"
 #include "oled.h"
@@ -28,6 +29,17 @@ static void on_usb_input(const kvm_hidp_out_t *ev)
 
 void app_main(void)
 {
+#if CONFIG_ESPKVM_PWR_EN_GPIO >= 0
+    /* Boards like the T-Embed gate display/peripheral power behind a
+     * GPIO; enable it before anything tries to talk to the panel. */
+    gpio_config_t pwr = {
+        .pin_bit_mask = 1ULL << CONFIG_ESPKVM_PWR_EN_GPIO,
+        .mode = GPIO_MODE_OUTPUT,
+    };
+    gpio_config(&pwr);
+    gpio_set_level(CONFIG_ESPKVM_PWR_EN_GPIO, 1);
+#endif
+
     ESP_ERROR_CHECK(store_init());
 
     /* OLED is non-fatal: a hub without a display still switches via

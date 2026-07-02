@@ -27,6 +27,11 @@ jobs:
             target: esp32s3
             chip_family: ESP32-S3
             path: firmware/hub
+          - name: hub-tembed   # LILYGO T-Embed all-in-one hub
+            target: esp32s3
+            chip_family: ESP32-S3
+            path: firmware/hub
+            sdkconfig_defaults: "sdkconfig.defaults;sdkconfig.tembed"
           - name: dongle
             target: esp32s2
             chip_family: ESP32-S2
@@ -45,7 +50,9 @@ jobs:
           target: ${{ matrix.target }}
           path: ${{ matrix.path }}
           command: >
-            idf.py build &&
+            idf.py ${{ matrix.sdkconfig_defaults &&
+            format('-DSDKCONFIG_DEFAULTS="{0}"', matrix.sdkconfig_defaults)
+            || '' }} build &&
             cd build &&
             esptool.py --chip ${{ matrix.target }} merge_bin
             -o espkvm-${{ matrix.name }}-web.bin @flash_args

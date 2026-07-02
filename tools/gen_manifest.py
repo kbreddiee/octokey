@@ -21,7 +21,7 @@ import pathlib
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--name", required=True,
-                    choices=["hub", "dongle", "dongle-s3"])
+                    choices=["hub", "hub-tembed", "dongle", "dongle-s3"])
     ap.add_argument("--chip", required=True,
                     choices=["ESP32-S2", "ESP32-S3"])
     ap.add_argument("--version", default="dev")

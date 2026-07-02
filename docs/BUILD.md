@@ -6,9 +6,14 @@ Prices are typical mid-2026 street prices. Both AliExpress (cheap, 1–3 weeks)
 and Amazon (2× the price, tomorrow) carry all of these — search the exact
 terms below.
 
+**Hub, pick one:** the LILYGO T-Embed (option A below — ready-made, cased,
+battery-capable, ~$29 + $8 splitter cable) or the DIY DevKitC-1 stack
+(option B — cheaper, all parts exposed, rows 1/3/4/5/6 below).
+
 | # | Part | Search term | Qty | ~AliExpress | ~Amazon |
 |---|------|-------------|-----|------------:|--------:|
-| 1 | ESP32-S3 DevKitC-1 (any N8/N16 variant) | `ESP32-S3-DevKitC-1 N8R2` | 1 | $8 | $14 |
+| 0 | LILYGO T-Embed (hub option A) | `LILYGO T-Embed ESP32-S3` | 1 | $28 | $29 |
+| 1 | ESP32-S3 DevKitC-1 (hub option B) | `ESP32-S3-DevKitC-1 N8R2` | 1 | $8 | $14 |
 | 2 | ESP32-S2 Mini (Lolin/Wemos) | `S2 Mini ESP32-S2 Lolin` | 1 per target PC (up to 10) | $3.50 | $6 |
 | 3 | SSD1306 0.96" OLED, 128×64, I²C | `SSD1306 0.96 I2C OLED` | 1 | $2.50 | $5 |
 | 4 | EC11 rotary encoder module (breakout w/ pins) | `KY-040 rotary encoder` | 1 | $1.50 | $4 |
@@ -41,7 +46,34 @@ images. The S3 image has the T-Dongle-S3's LCD enabled by default
 / USB warnings. On boards whose only LED is addressable RGB, the plain
 status LED is disabled (`ESPKVM_LED_GPIO=-1`, the S3 default).
 
-## Wiring the hub (ESP32-S3 DevKitC-1)
+## Hub option A: LILYGO T-Embed (zero wiring)
+
+The [LILYGO T-Embed](https://lilygo.cc/) (~$29) is an ESP32-S3 in a finished
+enclosure with a 320×170 ST7789 LCD, a rotary encoder with push-button and
+a LiPo charge circuit — everything the hub needs, no soldering. Build with:
+
+```sh
+cd firmware/hub
+idf.py set-target esp32s3
+idf.py -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.tembed" build flash
+```
+
+(or flash the `espkvm-hub-tembed-web.bin` release image).
+
+Two accessories complete it:
+
+- **USB-C OTG splitter with power injection** (search `USB C OTG splitter
+  power`, ~$8 — the kind sold for Fire TV Sticks): its C-plug goes into the
+  T-Embed, the keyboard/receiver into its USB-A socket, and a 5 V charger
+  into its power leg. This powers the board, charges the battery *and*
+  feeds the keyboard at the same time, through the single USB-C port.
+- **(optional) 1S LiPo with PH2.0 plug** (~$5, e.g. 1000 mAh): plugs into
+  the battery connector for cable-free operation between charges.
+
+Controls are identical to the DevKit build (rotate/click/double-click/hold);
+the UI renders 2× scaled on the color panel.
+
+## Hub option B: ESP32-S3 DevKitC-1 (breadboard-style, ~$15)
 
 All pins are configurable via `idf.py menuconfig → espkvm hub`; these are
 the defaults:
