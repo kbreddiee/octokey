@@ -38,6 +38,15 @@ handled.
 
 If the hub reboots it comes back on the last active slot.
 
+## Dongle LCD (LILYGO T-Dongle-S3)
+
+Dongles with the T-Dongle-S3's screen show their **slot number as a huge
+digit**, so you always know which digit to press after the Right-Ctrl
+double-tap. The screen turns **green with "ACTIVE"** on whichever machine
+is currently selected, and warns with `hub offline` / `USB not up` when
+something's wrong. S2 Mini dongles convey the same states with their LED
+(see below).
+
 ## Link status
 
 The bottom strip on the OLED shows one cell per slot: `-` = empty,

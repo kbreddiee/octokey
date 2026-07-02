@@ -52,6 +52,7 @@ static dongle_pairing_t s_pair;             /* valid when s_state == RUN  */
 static bool s_have_pair;
 static kvm_replay_t s_replay;
 static volatile int64_t s_last_rx_us;
+static volatile bool s_active;   /* KVM_FLAG_ACTIVE on the last packet */
 
 /* Pairing-session scratch (only meaningful while DLINK_PAIRING) */
 static struct {
@@ -284,6 +285,7 @@ static void handle_data(int type, const rx_item_t *it)
         store_set_epoch(h.epoch);   /* raise the reboot-persistent floor */
     }
     s_last_rx_us = esp_timer_get_time();
+    s_active = (h.flags & KVM_FLAG_ACTIVE) != 0;
 
     switch (type) {
     case KVM_PKT_KEYBOARD: {
@@ -432,4 +434,14 @@ void link_factory_reset(void)
 uint32_t link_ms_since_rx(void)
 {
     return (uint32_t)((esp_timer_get_time() - s_last_rx_us) / 1000);
+}
+
+uint8_t link_slot(void)
+{
+    return s_have_pair ? s_pair.slot : KVM_SLOT_NONE;
+}
+
+bool link_is_active(void)
+{
+    return s_active;
 }

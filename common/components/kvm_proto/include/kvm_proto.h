@@ -76,11 +76,15 @@ typedef enum {
  * Pairing packets set epoch = seq = 0; their freshness comes from the
  * random `session` id and ephemeral ECDH keys instead.
  */
+/* Header flag bits */
+#define KVM_FLAG_ACTIVE 0x01  /* hub -> dongle: "you are the active slot"
+                               * (drives the dongle's LCD/LED indicator)  */
+
 typedef struct {
     uint8_t  magic;      /* KVM_MAGIC                                     */
     uint8_t  version;    /* KVM_PROTO_VERSION                             */
     uint8_t  type;       /* kvm_pkt_type_t                                */
-    uint8_t  flags;      /* reserved, 0                                   */
+    uint8_t  flags;      /* KVM_FLAG_* (receivers ignore unknown bits)    */
     uint32_t epoch;
     uint32_t seq;
 } kvm_hdr_t;

@@ -168,6 +168,9 @@ static void send_to_slot_locked(uint8_t slot, void *pkt, size_t len)
     }
     kvm_hdr_t *h = (kvm_hdr_t *)pkt;
     h->seq = ++s_seq;
+    /* Tell the dongle whether it is the currently-selected target — it
+     * shows this on its LCD/LED so you can tell slots apart at a glance. */
+    h->flags = (slot == s_active) ? KVM_FLAG_ACTIVE : 0;
     esp_now_send(p->mac, (uint8_t *)pkt, len);
 }
 
@@ -231,6 +234,7 @@ void link_switch(uint8_t slot)
 
     xSemaphoreTake(s_lock, portMAX_DELAY);
     uint8_t prev = s_active;
+    s_active = slot;   /* before the sends, so their ACTIVE flags are right */
     if (prev != slot && prev != KVM_SLOT_NONE) {
         /* Release-all to the machine we're leaving, twice for luck (the
          * frames are fire-and-forget; a stuck Ctrl on an unattended box is
@@ -239,7 +243,6 @@ void link_switch(uint8_t slot)
         send_control_locked(prev, KVM_CTL_RELEASE_ALL);
         send_control_locked(prev, KVM_CTL_RELEASE_ALL);
     }
-    s_active = slot;
     store_set_last_slot(slot);
     send_control_locked(slot, KVM_CTL_PING);   /* instant health probe */
     xSemaphoreGive(s_lock);

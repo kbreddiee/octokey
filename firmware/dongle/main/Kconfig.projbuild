@@ -12,13 +12,12 @@ menu "espkvm dongle"
         default -1
         help
             GPIO15 is the onboard LED of the Lolin/Wemos S2 Mini.
-            Boards whose only LED is addressable RGB (M5Stack AtomS3U:
-            WS2812 on GPIO35, LILYGO T-Dongle-S3: APA102) should set -1;
-            the dongle works fine without a status LED.
+            Boards whose only LED is addressable RGB (LILYGO T-Dongle-S3:
+            APA102, M5Stack AtomS3U: WS2812) should keep -1; the T-Dongle
+            uses its LCD for status instead.
 
     config ESPKVM_BTN_GPIO
         int "Pairing button GPIO"
-        default 41 if IDF_TARGET_ESP32S3
         default 0
         help
             The onboard button used for pairing / factory reset.
@@ -26,5 +25,35 @@ menu "espkvm dongle"
               LILYGO T-Dongle-S3 : 0  (BOOT)
               M5Stack AtomS3U    : 41 (front button)
             Short press: enter pairing mode. Hold 5 s: factory reset.
+
+    config ESPKVM_LCD
+        bool "ST7735 status LCD (LILYGO T-Dongle-S3)"
+        default y if IDF_TARGET_ESP32S3
+        default n
+        help
+            Drive the T-Dongle-S3's 160x80 LCD: shows this dongle's slot
+            number, ACTIVE/idle state and link health. Harmless if enabled
+            on an S3 board without the panel (writes go nowhere).
+
+    if ESPKVM_LCD
+        config ESPKVM_LCD_MOSI
+            int "LCD MOSI (SDA) GPIO"
+            default 3
+        config ESPKVM_LCD_SCLK
+            int "LCD SCLK GPIO"
+            default 5
+        config ESPKVM_LCD_CS
+            int "LCD CS GPIO"
+            default 4
+        config ESPKVM_LCD_DC
+            int "LCD D/C GPIO"
+            default 2
+        config ESPKVM_LCD_RST
+            int "LCD RESET GPIO"
+            default 1
+        config ESPKVM_LCD_BL
+            int "LCD backlight GPIO (active low)"
+            default 38
+    endif
 
 endmenu

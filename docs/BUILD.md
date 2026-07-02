@@ -29,14 +29,17 @@ thumb-drive-style dongles that plug straight in:
 
 | Option | Price | Notes |
 |--------|------:|-------|
+| **LILYGO T-Dongle-S3** (ESP32-S3, USB-A plug, 160×80 LCD) | ~$12 | recommended: the LCD shows the slot number + ACTIVE state; all pin defaults match — just `idf.py set-target esp32s3` |
 | S2 Mini + rigid `USB-C female to USB-A male adapter` | +$1 | cheapest; stock firmware |
-| **M5Stack AtomS3U** (ESP32-S3, USB-A plug, cased) | ~$13 | nicest look; build with `idf.py set-target esp32s3` (button GPIO41 is already the S3 default) |
-| LILYGO T-Dongle-S3 (ESP32-S3, USB-A plug, tiny LCD) | ~$12 | set `ESPKVM_BTN_GPIO=0` in menuconfig |
+| M5Stack AtomS3U (ESP32-S3, USB-A plug, cased) | ~$13 | set `ESPKVM_BTN_GPIO=41`; no status display |
 | Custom PCB | ~$6–9/pc @ qty 10 | full reference design in [`hardware/dongle-refdesign/`](../hardware/dongle-refdesign/README.md) |
 
 CI ships both `espkvm-dongle` (ESP32-S2) and `espkvm-dongle-s3` (ESP32-S3)
-images; on S3 boards whose only LED is addressable RGB the status LED is
-simply disabled (`ESPKVM_LED_GPIO=-1`, the default there).
+images. The S3 image has the T-Dongle-S3's LCD enabled by default
+(`ESPKVM_LCD`, harmless on panel-less boards): a huge slot digit, a green
+**ACTIVE** screen when that machine is the selected target, and hub-offline
+/ USB warnings. On boards whose only LED is addressable RGB, the plain
+status LED is disabled (`ESPKVM_LED_GPIO=-1`, the S3 default).
 
 ## Wiring the hub (ESP32-S3 DevKitC-1)
 

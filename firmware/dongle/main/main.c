@@ -24,6 +24,9 @@
 #include "store.h"
 #include "usb_dev.h"
 #include "link.h"
+#if CONFIG_ESPKVM_LCD
+#include "lcd.h"
+#endif
 
 static const char *TAG = "main";
 
@@ -116,6 +119,11 @@ void app_main(void)
     xTaskCreate(button_task, "btn", 3072, NULL, 5, NULL);
 #if CONFIG_ESPKVM_LED_GPIO >= 0
     xTaskCreate(led_task, "led", 2048, NULL, 3, NULL);
+#endif
+#if CONFIG_ESPKVM_LCD
+    if (lcd_init() != ESP_OK) {
+        ESP_LOGW(TAG, "LCD init failed — continuing without display");
+    }
 #endif
 
     ESP_LOGI(TAG, "espkvm dongle ready");
