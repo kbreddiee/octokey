@@ -1,0 +1,21 @@
+menu "espkvm dongle"
+
+    config ESPKVM_CHANNEL
+        int "ESP-NOW Wi-Fi channel (must match the hub)"
+        range 1 13
+        default 1
+
+    config ESPKVM_LED_GPIO
+        int "Status LED GPIO"
+        default 15
+        help
+            GPIO15 is the onboard LED of the Lolin/Wemos S2 Mini.
+
+    config ESPKVM_BTN_GPIO
+        int "Pairing button GPIO"
+        default 0
+        help
+            GPIO0 is the onboard BOOT button of the S2 Mini.
+            Short press: enter pairing mode. Hold 5 s: factory reset.
+
+endmenu

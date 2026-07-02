@@ -1,0 +1,18 @@
+# espkvm dongle — ESP32-S2 Mini (Lolin/Wemos)
+CONFIG_IDF_TARGET="esp32s2"
+
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# 1 ms tick for snappy input handling
+CONFIG_FREERTOS_HZ=1000
+
+# Latency over size
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+# HKDF for pairing key derivation (off by default in IDF)
+CONFIG_MBEDTLS_HKDF_C=y
+
+# Two TinyUSB HID instances: boot keyboard + (mouse/consumer)
+CONFIG_TINYUSB_HID_COUNT=2

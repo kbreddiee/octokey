@@ -1,0 +1,56 @@
+# Claude Code Prompt — ESP32 Open-Source Wireless KVM
+
+Build a complete, production-quality open-source project called **espkvm** — a DIY wireless KVM that lets one USB keyboard (wired or wireless-dongle, e.g. a Rii X8 mini keyboard with touchpad) control up to 10 computers, switching between them instantly with a hotkey or rotary encoder.
+
+## Architecture
+
+- **Hub (transmitter)**: ESP32-S3 DevKitC-1 (dual USB). Acts as a USB **host**: a keyboard or a wireless keyboard's receiver dongle plugs into it. It parses HID reports (keyboard + mouse + consumer control, since receivers like the Rii X8's enumerate as composite HID devices) and forwards them over **ESP-NOW** to exactly one selected target dongle at a time.
+- **Dongles (receivers) ×10**: ESP32-S2 Mini (Lolin/Wemos S2 Mini). Each plugs into a target machine's USB port and enumerates via TinyUSB as a **composite USB HID device** (keyboard + mouse + consumer control). It receives ESP-NOW packets from the hub and replays them as HID reports. No drivers, works on Windows/macOS/Linux and locked-down POS terminals.
+- **Switching UI on the hub**: rotary encoder with push button + SSD1306 128x64 I2C OLED showing the active target (name + slot number + link status). Also support hotkey switching: a configurable modifier chord (default: double-tap Right-Ctrl, then 0–9) intercepted by the hub and NOT forwarded to the target.
+- **Wireless**: ESP-NOW with encryption (PMK + per-peer LMK). Include sequence numbers and a replay-protection window. Keystrokes must never go over the air in plaintext — call this out in docs (contrast with MouseJack-class vulnerabilities in cheap 2.4GHz keyboards).
+
+## Functional requirements
+
+1. **Pairing flow (no MAC address editing by users):**
+   - Hold the encoder button 3s on the hub → "pairing mode" broadcast on a fixed channel.
+   - Press the BOOT button on a dongle → it responds; hub and dongle exchange identity + derive/store an LMK; hub assigns the next free slot (0–9).
+   - Persist pairings in NVS on both sides. Support unpair/forget from a hub menu.
+2. **Switching:** encoder rotate = cycle slots, encoder click = confirm; hotkey chord = jump direct to slot N. Switch latency target < 50 ms. Send a "release all keys/buttons" report to the previous target on switch so no keys get stuck.
+3. **HID forwarding:** support boot-protocol and report-protocol keyboards; parse report descriptors generically enough to handle composite receivers (keyboard + mouse + consumer control on separate interfaces/report IDs). Forward mouse movement, wheel, buttons, and media keys, not just keystrokes.
+4. **Link health:** dongles ACK; hub shows per-slot online/offline on the OLED. Queue nothing when offline — drop and indicate.
+5. **Failsafe:** if the hub reboots, it returns to the last active slot from NVS.
+6. **OTA-free simplicity is fine**, but structure code so a web-flasher (ESP Web Tools) manifest can be generated for both firmware images.
+
+## Tech constraints
+
+- ESP-IDF v5.x (not Arduino) with TinyUSB for the S2 device role and the ESP-IDF `usb_host` HID driver for the S3.
+- Clean component structure, CI via GitHub Actions building both targets, `sdkconfig.defaults` per target.
+- MIT license.
+
+## Repo layout
+
+```
+espkvm/
+├── firmware/
+│   ├── hub/            # ESP32-S3: usb_host HID + ESP-NOW TX + OLED/encoder UI
+│   └── dongle/         # ESP32-S2: TinyUSB composite HID + ESP-NOW RX
+├── common/             # shared: packet format, crypto/pairing, protocol version
+├── tools/              # ESP Web Tools manifest generator, release scripts
+├── docs/
+│   ├── BUILD.md        # exact parts list w/ links, flashing, wiring (encoder+OLED pins)
+│   ├── PAIRING.md      # user-facing pairing & switching guide
+│   └── SECURITY.md     # threat model, ESP-NOW encryption details, replay protection
+├── .github/workflows/build.yml
+├── LICENSE
+└── README.md           # value prop, demo section placeholder, quickstart, FAQ
+```
+
+## Deliverables & quality bar
+
+- Fully compiling firmware for both targets (assume ESP-IDF v5.2).
+- A documented binary packet format in `common/` (versioned, with report type enum: KEYBOARD, MOUSE, CONSUMER, CONTROL/PAIRING).
+- Defensive code: bounds-check every received packet, validate protocol version, ignore packets from unpaired MACs.
+- README written for a Hacker News / r/mechanicalkeyboards audience: what it is, why (10-machine switching doesn't exist commercially; encrypted unlike cheap 2.4GHz keyboards), BOM under $50, 15-minute setup.
+- Inline comments explaining the non-obvious parts: HID report descriptor parsing, ESP-NOW LMK handling, the release-all-on-switch logic.
+
+Start by scaffolding the repo, then implement `common/` (protocol + pairing), then dongle firmware, then hub firmware, then docs. Ask me before adding any dependency beyond ESP-IDF built-ins.

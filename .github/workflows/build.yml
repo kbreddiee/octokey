@@ -1,0 +1,87 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  host-tests:
+    name: host unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run
+        run: make -C tests/host test
+
+  firmware:
+    name: firmware (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: hub
+            target: esp32s3
+            chip_family: ESP32-S3
+            path: firmware/hub
+          - name: dongle
+            target: esp32s2
+            chip_family: ESP32-S2
+            path: firmware/dongle
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build with ESP-IDF v5.2
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.2.2
+          target: ${{ matrix.target }}
+          path: ${{ matrix.path }}
+          command: >
+            idf.py build &&
+            cd build &&
+            esptool.py --chip ${{ matrix.target }} merge_bin
+            -o espkvm-${{ matrix.name }}-web.bin @flash_args
+
+      - name: Generate ESP Web Tools manifest
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          python3 tools/gen_manifest.py \
+            --name ${{ matrix.name }} \
+            --chip ${{ matrix.chip_family }} \
+            --version "${VERSION}" \
+            --out ${{ matrix.path }}/build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: espkvm-${{ matrix.name }}
+          path: |
+            ${{ matrix.path }}/build/espkvm_*.bin
+            ${{ matrix.path }}/build/espkvm-${{ matrix.name }}-web.bin
+            ${{ matrix.path }}/build/manifest-${{ matrix.name }}.json
+            ${{ matrix.path }}/build/bootloader/bootloader.bin
+            ${{ matrix.path }}/build/partition_table/partition-table.bin
+
+  release:
+    name: attach release assets
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [host-tests, firmware]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/espkvm-hub/espkvm-hub-web.bin
+            dist/espkvm-hub/manifest-hub.json
+            dist/espkvm-dongle/espkvm-dongle-web.bin
+            dist/espkvm-dongle/manifest-dongle.json

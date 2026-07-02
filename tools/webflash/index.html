@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<!--
+  Minimal ESP Web Tools flashing page for espkvm.
+  Host this directory (plus the merged .bin files and manifest-*.json from
+  a release) on any static web server — GitHub Pages works fine.
+  Flashing requires Chrome or Edge (WebSerial).
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>espkvm web flasher</title>
+  <script type="module"
+    src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module">
+  </script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 40rem;
+           margin: 3rem auto; padding: 0 1rem; }
+    section { margin: 2rem 0; }
+  </style>
+</head>
+<body>
+  <h1>espkvm web flasher</h1>
+  <p>Plug the board in via USB, click the button, pick the serial port.</p>
+
+  <section>
+    <h2>Hub (ESP32-S3 DevKitC-1)</h2>
+    <p>Use the port labelled <strong>UART</strong> on the DevKit.</p>
+    <esp-web-install-button manifest="manifest-hub.json"></esp-web-install-button>
+  </section>
+
+  <section>
+    <h2>Dongle (ESP32-S2 Mini)</h2>
+    <p>Hold <strong>0 (BOOT)</strong>, tap <strong>RST</strong>, release
+       <strong>0</strong> first — the S2 Mini needs to be in download mode.</p>
+    <esp-web-install-button manifest="manifest-dongle.json"></esp-web-install-button>
+  </section>
+</body>
+</html>
