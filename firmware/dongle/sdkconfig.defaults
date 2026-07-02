@@ -1,5 +1,7 @@
-# espkvm dongle — ESP32-S2 Mini (Lolin/Wemos)
-CONFIG_IDF_TARGET="esp32s2"
+# espkvm dongle — ESP32-S2 Mini (Lolin/Wemos), or any ESP32-S2/S3 board
+# with native USB (LILYGO T-Dongle-S3, M5Stack AtomS3U, ...).
+#
+# Pick the chip before building:   idf.py set-target esp32s2   (or esp32s3)
 
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"

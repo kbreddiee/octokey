@@ -31,6 +31,10 @@ jobs:
             target: esp32s2
             chip_family: ESP32-S2
             path: firmware/dongle
+          - name: dongle-s3   # AtomS3U / T-Dongle-S3 form-factor boards
+            target: esp32s3
+            chip_family: ESP32-S3
+            path: firmware/dongle
     steps:
       - uses: actions/checkout@v4
 

@@ -22,6 +22,22 @@ around **$30**, a full 10-machine build around **$50** (AliExpress pricing).
 Also useful: a USB 5 V/2 A phone charger to power the hub, and a data-capable
 (not charge-only!) USB cable for flashing.
 
+### Dongle form-factor options
+
+The S2 Mini needs a cable or adapter to reach a USB port. If you want
+thumb-drive-style dongles that plug straight in:
+
+| Option | Price | Notes |
+|--------|------:|-------|
+| S2 Mini + rigid `USB-C female to USB-A male adapter` | +$1 | cheapest; stock firmware |
+| **M5Stack AtomS3U** (ESP32-S3, USB-A plug, cased) | ~$13 | nicest look; build with `idf.py set-target esp32s3` (button GPIO41 is already the S3 default) |
+| LILYGO T-Dongle-S3 (ESP32-S3, USB-A plug, tiny LCD) | ~$12 | set `ESPKVM_BTN_GPIO=0` in menuconfig |
+| Custom PCB | ~$6–9/pc @ qty 10 | full reference design in [`hardware/dongle-refdesign/`](../hardware/dongle-refdesign/README.md) |
+
+CI ships both `espkvm-dongle` (ESP32-S2) and `espkvm-dongle-s3` (ESP32-S3)
+images; on S3 boards whose only LED is addressable RGB the status LED is
+simply disabled (`ESPKVM_LED_GPIO=-1`, the default there).
+
 ## Wiring the hub (ESP32-S3 DevKitC-1)
 
 All pins are configurable via `idf.py menuconfig → espkvm hub`; these are

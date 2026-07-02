@@ -71,6 +71,7 @@ static void button_task(void *arg)
     }
 }
 
+#if CONFIG_ESPKVM_LED_GPIO >= 0
 static void led_task(void *arg)
 {
     (void)arg;
@@ -102,6 +103,7 @@ static void led_task(void *arg)
         gpio_set_level(LED_GPIO, on);
     }
 }
+#endif /* CONFIG_ESPKVM_LED_GPIO >= 0 */
 
 void app_main(void)
 {
@@ -112,7 +114,9 @@ void app_main(void)
     ESP_ERROR_CHECK(link_init());
 
     xTaskCreate(button_task, "btn", 3072, NULL, 5, NULL);
+#if CONFIG_ESPKVM_LED_GPIO >= 0
     xTaskCreate(led_task, "led", 2048, NULL, 3, NULL);
+#endif
 
     ESP_LOGI(TAG, "espkvm dongle ready");
 }
