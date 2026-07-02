@@ -27,7 +27,16 @@ def main() -> None:
                     choices=["ESP32-S2", "ESP32-S3"])
     ap.add_argument("--version", default="dev")
     ap.add_argument("--out", default=".", help="output directory")
+    ap.add_argument("--extra-part", action="append", default=[],
+                    metavar="FILE:OFFSET",
+                    help="additional flash part, e.g. the dongle pack: "
+                         "espkvm-dongle-pack.bin:0x290000")
     args = ap.parse_args()
+
+    parts = [{"path": f"espkvm-{args.name}-web.bin", "offset": 0}]
+    for extra in args.extra_part:
+        path, _, offset = extra.rpartition(":")
+        parts.append({"path": path, "offset": int(offset, 0)})
 
     manifest = {
         "name": f"espkvm {args.name}",
@@ -36,9 +45,7 @@ def main() -> None:
         "builds": [
             {
                 "chipFamily": args.chip,
-                "parts": [
-                    {"path": f"espkvm-{args.name}-web.bin", "offset": 0}
-                ],
+                "parts": parts,
             }
         ],
     }

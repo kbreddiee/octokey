@@ -69,6 +69,8 @@ static struct {
     int      flash_ticks;
     int      warn_ticks;       /* all-LED warning flash countdown        */
     bool     forget_armed;     /* triple-click detected, warning shown   */
+    volatile uint8_t provision; /* ui_flash_state_t                      */
+    int      provision_ticks;  /* done/fail pattern countdown            */
 } s_ui;
 
 /* ------------------------------------------------------------------ */
@@ -79,6 +81,31 @@ static void leds_render(uint32_t tick)
 {
     bool on[KVM_MAX_SLOTS] = {0};
     uint8_t active = link_active_slot();
+
+    /* Dongle provisioning overrides everything: back-and-forth sweep
+     * while writing, all-on for done, fast all-blink for failure. */
+    if (s_ui.provision == UI_FLASH_BUSY) {
+        int pos = tick % 18;
+        if (pos >= 9) {
+            pos = 18 - pos - 1 + 1;   /* 9..17 -> 9..1 (bounce back) */
+        }
+        if (pos < KVM_MAX_SLOTS) {
+            on[pos] = true;
+        }
+        goto out;
+    }
+    if (s_ui.provision_ticks > 0) {
+        bool lit = (s_ui.provision == UI_FLASH_DONE)
+                 ? true
+                 : ((s_ui.provision_ticks / 3) % 2) == 1;
+        for (int i = 0; i < KVM_MAX_SLOTS; i++) {
+            on[i] = lit;
+        }
+        if (--s_ui.provision_ticks == 0) {
+            s_ui.provision = UI_FLASH_IDLE;
+        }
+        goto out;
+    }
 
     if (s_ui.warn_ticks > 0) {
         /* all-LED triple flash: 100 ms on / 100 ms off */
@@ -108,6 +135,7 @@ static void leds_render(uint32_t tick)
         on[0] = (tick % 50) < 2;
     }
 
+out:
     for (int i = 0; i < KVM_MAX_SLOTS; i++) {
         gpio_set_level(LED_PINS[i], on[i]);
     }
@@ -276,6 +304,16 @@ void ui_post_input_event(input_event_t evt, uint8_t arg)
 {
     ui_msg_t m = { .type = 1, .evt = (uint8_t)evt, .arg = arg };
     xQueueSend(s_q, &m, 0);
+}
+
+void ui_flasher_state(ui_flash_state_t state)
+{
+    /* Written from the flasher task; single byte + tick count, and the
+     * UI task only reads them — benign ordering either way. */
+    s_ui.provision = (uint8_t)state;
+    if (state == UI_FLASH_DONE || state == UI_FLASH_FAIL) {
+        s_ui.provision_ticks = 75;   /* ~1.5 s at 20 ms ticks */
+    }
 }
 
 esp_err_t ui_init(void)

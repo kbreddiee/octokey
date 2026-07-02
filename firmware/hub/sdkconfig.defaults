@@ -17,3 +17,6 @@ CONFIG_MBEDTLS_HKDF_C=y
 # ESP-NOW supports at most 6-7 encrypted peers by default; we need 10
 # dongles + the broadcast pseudo-peer.
 CONFIG_ESP_WIFI_ESPNOW_MAX_ENCRYPT_NUM=14
+
+# esp-serial-flasher talks to the dongle bootloader over USB CDC-ACM
+CONFIG_SERIAL_FLASHER_INTERFACE_USB=y

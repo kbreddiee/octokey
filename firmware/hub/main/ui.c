@@ -43,7 +43,7 @@ static const char *TAG = "ui";
 
 typedef enum {
     UMSG_ROT, UMSG_CLICK, UMSG_DBL, UMSG_LONG,
-    UMSG_LINK, UMSG_INPUT, UMSG_TICK,
+    UMSG_LINK, UMSG_INPUT, UMSG_TICK, UMSG_FLASH,
 } umsg_type_t;
 
 typedef struct {
@@ -62,6 +62,7 @@ static struct {
     uint8_t  sel;            /* selection cursor (a slot number)         */
     uint8_t  menu_idx;
     bool     cmd_mode;       /* hotkey command mode indicator            */
+    uint8_t  flash_state;    /* ui_flash_state_t                         */
     char     toast[22];
     int64_t  toast_until_us;
     int64_t  pair_end_us;
@@ -166,6 +167,14 @@ static void render(void)
 {
     int64_t now = esp_timer_get_time();
     oled_clear();
+
+    if (s_ui.flash_state == UI_FLASH_BUSY) {
+        oled_text(0, 0, "DONGLE FLASH", true);
+        oled_text(0, 3, "Writing firmware...", false);
+        oled_text(0, 5, "do not unplug", false);
+        oled_flush();
+        return;
+    }
 
     if (s_ui.screen == SCR_PAIRING) {
         int secs = (int)((s_ui.pair_end_us - now) / 1000000);
@@ -381,6 +390,17 @@ static void handle_msg(const ui_msg_t *m)
         }
         break;
 
+    case UMSG_FLASH:
+        s_ui.flash_state = m->evt;
+        if (m->evt == UI_FLASH_DONE) {
+            toast("Dongle OK - pair it");
+            s_ui.flash_state = UI_FLASH_IDLE;
+        } else if (m->evt == UI_FLASH_FAIL) {
+            toast("Dongle flash FAILED");
+            s_ui.flash_state = UI_FLASH_IDLE;
+        }
+        break;
+
     case UMSG_TICK:
     default:
         break;
@@ -413,6 +433,12 @@ void ui_post_link_event(link_event_t evt, uint8_t slot)
 void ui_post_input_event(input_event_t evt, uint8_t arg)
 {
     ui_msg_t m = { .type = UMSG_INPUT, .evt = (uint8_t)evt, .arg = arg };
+    xQueueSend(s_q, &m, 0);
+}
+
+void ui_flasher_state(ui_flash_state_t state)
+{
+    ui_msg_t m = { .type = UMSG_FLASH, .evt = (uint8_t)state };
     xQueueSend(s_q, &m, 0);
 }
 

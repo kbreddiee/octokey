@@ -1,7 +1,11 @@
-## espkvm hub dependencies.
-## usb_host_hid is Espressif's official HID host class driver for the
-## ESP-IDF usb_host stack (the driver specified for the S3) — the only
-## dependency beyond ESP-IDF built-ins.
+## espkvm hub dependencies — all Espressif-official managed components.
+##  - usb_host_hid:      HID host class driver (keyboard/receiver input)
+##  - usb_host_cdc_acm:  CDC-ACM host driver, used to talk to a dongle's
+##                       ROM bootloader plugged into the keyboard port
+##  - esp-serial-flasher: Espressif's "one ESP flashes another" library,
+##                       drives the dongle-provisioning feature
 dependencies:
   idf: ">=5.2"
   espressif/usb_host_hid: "~1.0.1"
+  espressif/usb_host_cdc_acm: "^2.0.0"
+  espressif/esp-serial-flasher: "^1.4.0"

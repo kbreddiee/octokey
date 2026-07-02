@@ -47,6 +47,23 @@ is currently selected, and warns with `hub offline` / `USB not up` when
 something's wrong. S2 Mini dongles convey the same states with their LED
 (see below).
 
+## Flashing a brand-new dongle — no PC needed
+
+The hub can install the dongle firmware itself:
+
+1. Unplug the keyboard from the hub.
+2. Hold the dongle's **BOOT** button and plug it into the hub's USB port
+   (this puts it in bootloader mode).
+3. Wait ~30 s. Display hubs show "DONGLE FLASH"; the headless hub sweeps
+   its LED row back and forth. All-LEDs-solid / "flashed" = done, the
+   dongle reboots into espkvm firmware.
+4. Unplug it, plug the keyboard back, and pair as usual.
+
+(The hub keeps a copy of the dongle firmware in its own flash; the web
+flasher installs it alongside the hub firmware automatically. If you see
+"dimage partition empty" in the hub log, flash the pack once:
+`esptool.py write_flash 0x290000 espkvm-dongle-pack.bin`.)
+
 ## Link status
 
 The bottom strip on the OLED shows one cell per slot: `-` = empty,

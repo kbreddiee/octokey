@@ -17,6 +17,7 @@
 #include "link.h"
 #include "input.h"
 #include "usb_kbd.h"
+#include "flasher.h"
 #include "ui.h"
 
 static const char *TAG = "main";
@@ -54,6 +55,11 @@ void app_main(void)
     ESP_ERROR_CHECK(ui_init());
     ESP_ERROR_CHECK(input_init(ui_post_input_event));
     ESP_ERROR_CHECK(usb_kbd_init(on_usb_input));
+
+    /* Dongle provisioning through the same USB port (non-fatal). */
+    if (flasher_init() != ESP_OK) {
+        ESP_LOGW(TAG, "dongle provisioning unavailable");
+    }
 
     ESP_LOGI(TAG, "espkvm hub ready (active slot %u)", link_active_slot());
 }

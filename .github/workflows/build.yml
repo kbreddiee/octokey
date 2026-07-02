@@ -82,10 +82,41 @@ jobs:
             ${{ matrix.path }}/build/bootloader/bootloader.bin
             ${{ matrix.path }}/build/partition_table/partition-table.bin
 
+  # The dongle pack lets a hub flash T-Dongle-S3s through its own USB
+  # port. Hub manifests get a second part writing the pack into the hub's
+  # dimage partition (0x290000) in the same web-flash click.
+  pack:
+    name: dongle provisioning pack
+    needs: [firmware]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Build pack and hub manifests
+        run: |
+          python3 tools/gen_dongle_pack.py \
+            --image dist/espkvm-dongle-s3/espkvm-dongle-s3-web.bin \
+            --out dist/espkvm-dongle-pack.bin
+          for hub in hub hub-tembed hub-headless; do
+            python3 tools/gen_manifest.py \
+              --name "$hub" --chip ESP32-S3 \
+              --version "${GITHUB_REF_NAME}" \
+              --extra-part espkvm-dongle-pack.bin:0x290000 \
+              --out dist
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: espkvm-webflash
+          path: |
+            dist/espkvm-dongle-pack.bin
+            dist/manifest-*.json
+
   release:
     name: attach release assets
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [host-tests, firmware]
+    needs: [host-tests, firmware, pack]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -98,6 +129,13 @@ jobs:
         with:
           files: |
             dist/espkvm-hub/espkvm-hub-web.bin
-            dist/espkvm-hub/manifest-hub.json
+            dist/espkvm-hub-tembed/espkvm-hub-tembed-web.bin
+            dist/espkvm-hub-headless/espkvm-hub-headless-web.bin
             dist/espkvm-dongle/espkvm-dongle-web.bin
             dist/espkvm-dongle/manifest-dongle.json
+            dist/espkvm-dongle-s3/espkvm-dongle-s3-web.bin
+            dist/espkvm-dongle-s3/manifest-dongle-s3.json
+            dist/espkvm-webflash/espkvm-dongle-pack.bin
+            dist/espkvm-webflash/manifest-hub.json
+            dist/espkvm-webflash/manifest-hub-tembed.json
+            dist/espkvm-webflash/manifest-hub-headless.json
