@@ -62,6 +62,11 @@ between them instantly with a rotary knob or a keyboard chord.
   USB host, no BOM beyond the one chip. Trade-off: the phone↔hub hop is
   WPA2-only, not the double-encrypted scheme the rest of espkvm uses —
   [documented honestly](docs/SECURITY.md#espkvm-air-the-phonehub-hop).
+- **Want it fully self-contained instead? `firmware/hub-tdeck`** runs on
+  the LILYGO T-Deck — onboard keyboard, trackball and screen, no phone or
+  PC needed at all. Its keyboard hardware has no Ctrl/Alt/Win/arrows, so
+  the firmware remaps Alt→Ctrl and adds a Symbol+trackball arrow-key
+  mode — [full details in BUILD.md](docs/BUILD.md#espkvm-hub-tdeck-fully-self-contained-no-phonepc-needed).
 
 ## Quickstart (15 minutes + soldering four wires)
 

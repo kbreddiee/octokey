@@ -13,6 +13,10 @@ terms below.
   phone's browser becomes the keyboard, touchpad and switcher. See
   [espkvm Air](#espkvm-air-phone-as-the-hub-no-usb-keyboard) below —
   skip straight there if this is your build.
+- **LILYGO T-Deck / T-Deck Plus** — no phone, no PC, no external
+  keyboard: a self-contained onboard keyboard + trackball + screen
+  (~$65–90, real hardware limitations — read before ordering). See
+  [espkvm hub-tdeck](#espkvm-hub-tdeck-fully-self-contained-no-phonepc-needed).
 - **Custom espkvm hub PCB** — button + 10 slot LEDs, 18650 battery slot,
   built-in USB-A keyboard port; full fab-ready reference design in
   [`hardware/hub-refdesign/`](../hardware/hub-refdesign/README.md)
@@ -98,6 +102,43 @@ every other hub variant; only the "top half" — where keystrokes originate
 Because there's no USB host, espkvm Air can't provision dongles over USB
 (no `flasher.c` on this variant) — flash new dongles from a PC or another
 hub instead.
+
+## espkvm hub-tdeck: fully self-contained, no phone/PC needed
+
+The [LILYGO T-Deck / T-Deck Plus](https://lilygo.cc/) (~$65–90, ESP32-S3,
+2.8" screen, physical keyboard, trackball) is the most self-contained
+option: unlike espkvm Air it needs no phone, and unlike every other hub
+it needs no external keyboard either. Build:
+
+```sh
+cd firmware/hub-tdeck
+idf.py build flash
+```
+
+**Important limitation, read before ordering:** the onboard keyboard is a
+35-key BlackBerry-style matrix — letters, two Shift keys, Space, Enter,
+Backspace, a Symbol layer (numbers/punctuation), and a Mic key. **There
+is no physical Ctrl, Alt, Win, arrows, Esc, Tab, or F-keys.** This is a
+hardware fact about the board, not a firmware gap — `firmware/hub-tdeck`
+works around it as best it can:
+
+| Physical key | What it sends |
+|---|---|
+| Letters / Space / Enter / Backspace / Symbol layer | themselves, as normal typing |
+| **Alt** (held) | **Ctrl** — Alt+C/V/Z/A/F reach the target as real Ctrl shortcuts |
+| **double-tap Alt, then a digit** | switch slots (same trick as double-Right-Ctrl on the other hubs) |
+| Trackball roll | mouse movement |
+| **Symbol held + trackball roll** | arrow keys (partial fix for the missing arrow keys) |
+| Trackball center click | short = left-click, hold 3 s = pairing mode, triple-click + one more click = forget the active slot |
+
+If you need real Alt-Tab, Esc, Tab, or function-key shortcuts on the
+target machine, this isn't the hub for that — pick the T-Embed, the
+custom PCB, or espkvm Air instead. If your workflow is mostly typing plus
+Ctrl+C/V/Z/A/F and mouse movement, it's a genuinely nice all-in-one.
+
+Also note: the "Plus" variant's GPS and LoRa radio are unused by
+espkvm — the plain **T-Deck** (no Plus, cheaper) has the identical
+keyboard/trackball/screen/ESP32-S3 this firmware needs.
 
 ## Hub option A: LILYGO T-Embed (zero wiring)
 

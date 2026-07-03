@@ -23,6 +23,10 @@ travels over the air. Details in [SECURITY.md](SECURITY.md).
 instead of holding an encoder — everything else (BOOT press, 30 s window,
 slot assignment) is identical. See [BUILD.md](BUILD.md#espkvm-air-phone-as-the-hub-no-usb-keyboard).
 
+**On the T-Deck hub** (onboard keyboard/trackball, no phone/PC): hold the
+trackball's center button for 3 s instead of an encoder — same 30 s
+window, same BOOT-press-on-the-dongle step.
+
 ## Switching machines
 
 **Encoder:** rotate to move the cursor across paired slots (the bottom
@@ -38,6 +42,11 @@ machine**; the timing windows are tunable in `menuconfig`.
 **On espkvm Air:** tap any slot in the **Devices** tab to switch — that's
 the whole gesture, no hotkey needed since the phone screen is always
 right there.
+
+**On the T-Deck hub:** double-tap the **Alt** key (its keyboard has no
+Right-Ctrl), then a digit. Alt is otherwise sent to the target machine as
+Ctrl — see [BUILD.md](BUILD.md#espkvm-hub-tdeck-fully-self-contained-no-phonepc-needed)
+for the full key-remap table this board needs.
 
 On every switch the hub sends a *release-all* to the machine you're
 leaving, so a key held during the switch can't stay stuck there. The

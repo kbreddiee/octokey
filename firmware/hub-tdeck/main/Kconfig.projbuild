@@ -1,0 +1,72 @@
+menu "espkvm hub-tdeck"
+
+    config ESPKVM_CHANNEL
+        int "ESP-NOW Wi-Fi channel (must match the dongles)"
+        range 1 13
+        default 1
+
+    menu "Onboard peripherals (LILYGO official pin_config.h)"
+        config ESPKVM_POWERON_GPIO
+            int "Peripheral power-enable GPIO"
+            default 10
+        config ESPKVM_I2C_SDA
+            int "Keyboard/touch I2C SDA GPIO"
+            default 18
+        config ESPKVM_I2C_SCL
+            int "Keyboard/touch I2C SCL GPIO"
+            default 8
+
+        config ESPKVM_TBALL_UP
+            int "Trackball UP GPIO"
+            default 2
+        config ESPKVM_TBALL_DOWN
+            int "Trackball DOWN GPIO"
+            default 3
+        config ESPKVM_TBALL_LEFT
+            int "Trackball LEFT GPIO"
+            default 1
+        config ESPKVM_TBALL_RIGHT
+            int "Trackball RIGHT GPIO"
+            default 15
+        config ESPKVM_TBALL_CLICK
+            int "Trackball center-click GPIO"
+            default 0
+            help
+                Shared with BOOT — only matters at power-on/reset, safe to
+                read as a normal button once the app is running (same
+                pattern the T-Embed hub uses for its encoder click).
+
+        config ESPKVM_LCD_CS
+            int "LCD CS GPIO"
+            default 12
+        config ESPKVM_LCD_DC
+            int "LCD D/C GPIO"
+            default 11
+        config ESPKVM_LCD_BL
+            int "LCD backlight GPIO"
+            default 42
+        config ESPKVM_LCD_MOSI
+            int "LCD MOSI GPIO"
+            default 41
+        config ESPKVM_LCD_MISO
+            int "LCD MISO GPIO (shared SPI bus with SD/LoRa)"
+            default 38
+        config ESPKVM_LCD_SCLK
+            int "LCD SCLK GPIO"
+            default 40
+    endmenu
+
+    menu "Trackball feel"
+        config ESPKVM_TBALL_STEP
+            int "Pixels moved per trackball pulse"
+            range 1 20
+            default 4
+        config ESPKVM_HOTKEY_TAP_MS
+            int "Max ms between the two Alt taps (hotkey chord)"
+            default 400
+        config ESPKVM_HOTKEY_CMD_TIMEOUT_MS
+            int "Command-mode timeout (ms) waiting for the digit"
+            default 2000
+    endmenu
+
+endmenu
