@@ -54,6 +54,13 @@ menu "espkvm hub-tdeck"
         config ESPKVM_LCD_SCLK
             int "LCD SCLK GPIO"
             default 40
+
+        config ESPKVM_SD_CS
+            int "SD card CS GPIO (shares the LCD SPI bus, parked high)"
+            default 39
+        config ESPKVM_RADIO_CS
+            int "LoRa radio CS GPIO (shares the LCD SPI bus, parked high)"
+            default 9
     endmenu
 
     menu "Trackball feel"

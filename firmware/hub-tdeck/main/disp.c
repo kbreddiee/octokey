@@ -4,9 +4,14 @@
  * Deliberately simple (status only, no on-screen menu — the trackball
  * doesn't drive a cursor precise enough to make menu widgets pleasant,
  * and every action already has a direct physical gesture; see main.c and
- * docs/PAIRING.md). Same plain SPI + DMA-framebuffer approach as the
- * T-Dongle-S3's lcd.c: one big slot digit, ACTIVE/idle, link health, and
- * a one-line legend for the key remaps this board needs (see kbd_i2c.c).
+ * docs/PAIRING.md). One big slot digit, ACTIVE/idle, link health, and a
+ * one-line legend for the key remaps this board needs (see kbd_i2c.c).
+ *
+ * The panel is driven through IDF's own esp_lcd ST7789 driver rather
+ * than raw SPI like the T-Dongle-S3's lcd.c: a hand-rolled init sequence
+ * came up garbled on real hardware (see disp_init for the two
+ * board-specific requirements — SWRESET and parked chip-selects — that
+ * esp_lcd/this init handle and the naive approach missed).
  *
  * SPDX-License-Identifier: MIT
  */
@@ -22,6 +27,9 @@
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
 #include "esp_log.h"
+#include "esp_lcd_panel_io.h"
+#include "esp_lcd_panel_vendor.h"
+#include "esp_lcd_panel_ops.h"
 
 #include "kvm_proto.h"
 #include "kvm_font.h"
@@ -35,8 +43,9 @@ static const char *TAG = "disp";
 #define LCD_H 240
 
 /* Landscape 320x240 IPS panel, no offset on this batch. If the image is
- * shifted, X_OFF/Y_OFF are the knob; if colors/orientation are wrong,
- * flip the MADCTL byte below (0x60 <-> 0xA0, or drop the BGR bit 0x08). */
+ * shifted, X_OFF/Y_OFF are the knob (applied via esp_lcd_panel_set_gap);
+ * if orientation is mirrored/upside down, adjust the swap_xy/mirror
+ * calls in disp_init (LilyGO landscape = MV|MX, i.e. swap + mirror X). */
 #define X_OFF 0
 #define Y_OFF 0
 
@@ -49,7 +58,8 @@ static const char *TAG = "disp";
 #define COL_CYAN   C(6, 50, 28)
 #define COL_RED    C(30, 8, 6)
 
-static spi_device_handle_t s_spi;
+static esp_lcd_panel_io_handle_t s_io;
+static esp_lcd_panel_handle_t s_panel;
 static uint16_t *s_fb;
 static SemaphoreHandle_t s_lock;
 static bool s_ok;
@@ -62,25 +72,6 @@ static struct {
 } s_state;
 
 /* ------------------------------------------------------------------ */
-
-static void dc(int level) { gpio_set_level(CONFIG_ESPKVM_LCD_DC, level); }
-
-static void cmd8(uint8_t c)
-{
-    spi_transaction_t t = { .length = 8, .tx_buffer = &c };
-    dc(0);
-    spi_device_polling_transmit(s_spi, &t);
-}
-
-static void data(const uint8_t *d, size_t len)
-{
-    if (!len) return;
-    spi_transaction_t t = { .length = len * 8, .tx_buffer = d };
-    dc(1);
-    spi_device_polling_transmit(s_spi, &t);
-}
-
-static void cmd_d(uint8_t c, const uint8_t *d, size_t len) { cmd8(c); data(d, len); }
 
 static inline uint16_t swap16(uint16_t v) { return (uint16_t)((v << 8) | (v >> 8)); }
 
@@ -124,14 +115,8 @@ static void text_center(int y, const char *s, int scale, uint16_t fg)
 
 static void flush(void)
 {
-    uint8_t ca[4] = { X_OFF >> 8, X_OFF & 0xFF, (X_OFF + LCD_W - 1) >> 8, (X_OFF + LCD_W - 1) & 0xFF };
-    uint8_t ra[4] = { Y_OFF >> 8, Y_OFF & 0xFF, (Y_OFF + LCD_H - 1) >> 8, (Y_OFF + LCD_H - 1) & 0xFF };
-    cmd_d(0x2A, ca, 4);
-    cmd_d(0x2B, ra, 4);
-    cmd8(0x2C);
-    spi_transaction_t t = { .length = LCD_W * LCD_H * 2 * 8, .tx_buffer = s_fb };
-    dc(1);
-    spi_device_transmit(s_spi, &t);
+    /* draw_bitmap's end coordinates are exclusive */
+    esp_lcd_panel_draw_bitmap(s_panel, 0, 0, LCD_W, LCD_H, s_fb);
 }
 
 /* ------------------------------------------------------------------ */
@@ -196,16 +181,31 @@ static void disp_task(void *arg)
 
 esp_err_t disp_init(void)
 {
-    s_fb = heap_caps_malloc(LCD_W * LCD_H * 2, MALLOC_CAP_DMA);
+    /* Force internal SRAM, not PSRAM: a PSRAM-backed buffer handed to
+     * GDMA needs cache write-back coherency that isn't guaranteed for
+     * one huge transfer — the DMA engine can read stale cache lines. */
+    s_fb = heap_caps_malloc(LCD_W * LCD_H * 2, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
     if (!s_fb) return ESP_ERR_NO_MEM;
     s_lock = xSemaphoreCreateMutex();
     if (!s_lock) return ESP_ERR_NO_MEM;
 
+    /* The LCD shares its SPI bus with the SD card and the LoRa radio,
+     * and their chip-select lines power up floating — either device can
+     * sit half-selected and respond to the display's clocks. LilyGO's
+     * examples park both CS lines high before the first byte goes to the
+     * TFT; do the same. Backlight stays off until the first real frame
+     * so the panel never shows its power-on noise. */
     gpio_config_t io = {
-        .pin_bit_mask = (1ULL << CONFIG_ESPKVM_LCD_DC) | (1ULL << CONFIG_ESPKVM_LCD_BL),
+        .pin_bit_mask = (1ULL << CONFIG_ESPKVM_LCD_BL) |
+                        (1ULL << CONFIG_ESPKVM_SD_CS) |
+                        (1ULL << CONFIG_ESPKVM_RADIO_CS),
         .mode = GPIO_MODE_OUTPUT,
     };
-    ESP_ERROR_CHECK(gpio_config(&io));
+    esp_err_t err = gpio_config(&io);
+    if (err != ESP_OK) return err;
+    gpio_set_level(CONFIG_ESPKVM_LCD_BL, 0);
+    gpio_set_level(CONFIG_ESPKVM_SD_CS, 1);
+    gpio_set_level(CONFIG_ESPKVM_RADIO_CS, 1);
 
     spi_bus_config_t bus = {
         .mosi_io_num = CONFIG_ESPKVM_LCD_MOSI,
@@ -215,28 +215,66 @@ esp_err_t disp_init(void)
         .quadhd_io_num = -1,
         .max_transfer_sz = LCD_W * LCD_H * 2 + 16,
     };
-    esp_err_t err = spi_bus_initialize(SPI2_HOST, &bus, SPI_DMA_CH_AUTO);
+    err = spi_bus_initialize(SPI2_HOST, &bus, SPI_DMA_CH_AUTO);
     if (err != ESP_OK) return err;
 
-    spi_device_interface_config_t dev = {
-        .clock_speed_hz = 20 * 1000 * 1000,
-        .mode = 0,
-        .spics_io_num = CONFIG_ESPKVM_LCD_CS,
-        .queue_size = 2,
+    esp_lcd_panel_io_spi_config_t io_cfg = {
+        .cs_gpio_num = CONFIG_ESPKVM_LCD_CS,
+        .dc_gpio_num = CONFIG_ESPKVM_LCD_DC,
+        .pclk_hz = 20 * 1000 * 1000,
+        .lcd_cmd_bits = 8,
+        .lcd_param_bits = 8,
+        .spi_mode = 0,
+        .trans_queue_depth = 4,
     };
-    err = spi_bus_add_device(SPI2_HOST, &dev, &s_spi);
+    err = esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)SPI2_HOST, &io_cfg, &s_io);
     if (err != ESP_OK) return err;
 
-    /* This panel has no dedicated RESET pin broken out on T-Deck (shared
-     * with the board's own power-on sequencing) — SLPOUT + a settle
-     * delay is sufficient without a hardware reset pulse. */
-    cmd8(0x11);                               /* SLPOUT */
+    esp_lcd_panel_dev_config_t dev_cfg = {
+        .reset_gpio_num = -1,          /* no reset pin wired -> SWRESET */
+        .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB,
+        .bits_per_pixel = 16,
+    };
+    err = esp_lcd_new_panel_st7789(s_io, &dev_cfg, &s_panel);
+    if (err != ESP_OK) return err;
+
+    /* With no reset GPIO configured this issues a software reset, which
+     * the panel needs before init — there's no other way to get it out
+     * of whatever state power-up (or a previous crashed image) left its
+     * registers in on this board. */
+    err = esp_lcd_panel_reset(s_panel);
+    if (err != ESP_OK) return err;
+    err = esp_lcd_panel_init(s_panel);   /* SLPOUT, COLMOD 16bpp, MADCTL */
+    if (err != ESP_OK) return err;
+
+    /* Panel-batch tuning from LilyGO's own T-Deck TFT_eSPI
+     * ST7789_Init.h (JLX240 glass): frame-rate porch, gate/VCOM/power
+     * voltages and gamma tables. */
+    esp_lcd_panel_io_tx_param(s_io, 0xB2, (uint8_t[]){0x0C, 0x0C, 0x00, 0x33, 0x33}, 5);
+    esp_lcd_panel_io_tx_param(s_io, 0xB7, (uint8_t[]){0x75}, 1);
+    esp_lcd_panel_io_tx_param(s_io, 0xBB, (uint8_t[]){0x1A}, 1);
+    esp_lcd_panel_io_tx_param(s_io, 0xC0, (uint8_t[]){0x2C}, 1);
+    esp_lcd_panel_io_tx_param(s_io, 0xC2, (uint8_t[]){0x01}, 1);
+    esp_lcd_panel_io_tx_param(s_io, 0xC3, (uint8_t[]){0x13}, 1);
+    esp_lcd_panel_io_tx_param(s_io, 0xC4, (uint8_t[]){0x20}, 1);
+    esp_lcd_panel_io_tx_param(s_io, 0xC6, (uint8_t[]){0x0F}, 1);
+    esp_lcd_panel_io_tx_param(s_io, 0xD0, (uint8_t[]){0xA4, 0xA1}, 2);
+    esp_lcd_panel_io_tx_param(s_io, 0xE0, (uint8_t[]){0xD0, 0x0D, 0x14, 0x0D, 0x0D, 0x09, 0x38,
+                                                      0x44, 0x4E, 0x3A, 0x17, 0x18, 0x2F, 0x30}, 14);
+    esp_lcd_panel_io_tx_param(s_io, 0xE1, (uint8_t[]){0xD0, 0x09, 0x0F, 0x08, 0x07, 0x14, 0x37,
+                                                      0x44, 0x4D, 0x38, 0x15, 0x16, 0x2C, 0x3E}, 14);
+
+    esp_lcd_panel_invert_color(s_panel, true);
+    esp_lcd_panel_swap_xy(s_panel, true);       /* MADCTL MV — landscape   */
+    esp_lcd_panel_mirror(s_panel, true, false); /* MADCTL MX — scan origin */
+    esp_lcd_panel_set_gap(s_panel, X_OFF, Y_OFF);
+
+    /* Let the charge pumps settle on the new voltage config before the
+     * panel starts scanning out, then again before showing it. */
     vTaskDelay(pdMS_TO_TICKS(120));
-    cmd_d(0x3A, (const uint8_t[]){0x05}, 1);  /* RGB565 */
-    cmd_d(0x36, (const uint8_t[]){0x60}, 1);  /* MADCTL: landscape, BGR */
-    cmd8(0x21);                               /* INVON */
-    cmd8(0x13);                               /* NORON */
-    cmd8(0x29);                               /* DISPON */
+    err = esp_lcd_panel_disp_on_off(s_panel, true);
+    if (err != ESP_OK) return err;
+    vTaskDelay(pdMS_TO_TICKS(120));
 
     fill(COL_BLACK);
     flush();
@@ -244,7 +282,7 @@ esp_err_t disp_init(void)
 
     s_ok = true;
     xTaskCreate(disp_task, "disp", 3072, NULL, 4, NULL);
-    ESP_LOGI(TAG, "ST7789 up (320x240)");
+    ESP_LOGI(TAG, "ST7789 up (320x240, esp_lcd)");
     return ESP_OK;
 }
 
