@@ -80,6 +80,47 @@ office during the 30 seconds you pair, do the pairing somewhere else —
 after pairing, the link is pinned to the stored keys and MACs, and there
 is no re-negotiation to attack.
 
+## espkvm Air: the phone↔hub hop
+
+`firmware/hub-air` (phone browser as keyboard/touchpad — no physical
+keyboard) adds a second radio hop that the rest of this document doesn't
+cover: **phone → hub**, over the hub's own Wi-Fi access point, *before*
+anything reaches the hub↔dongle ESP-NOW link described above. That second
+leg (hub→dongle) is unchanged — same ephemeral-ECDH pairing, same unique
+per-dongle keys, same replay protection. The new leg is not:
+
+- **Confidentiality is exactly WPA2-PSK.** The phone↔hub hop is secured
+  by the Wi-Fi password you set (`CONFIG_ESPKVM_AP_PASSWORD`), full stop —
+  there is no additional per-session key exchange on top of it the way
+  there is for hub↔dongle. **Change the default password** (`espkvm-air`)
+  before relying on this anywhere you don't fully trust the room; treat it
+  like a shared house key, not a cryptographic secret.
+- **Anyone with the password can type as you.** Up to
+  `CONFIG_ESPKVM_AP_MAX_CLIENTS` phones can hold the WebSocket open at
+  once; there's no per-user identity, no PIN prompt, no session approval
+  on the hub. Rotate the password if a phone that had it is no longer
+  trusted.
+- **The control channel itself is plaintext-ish (ws://, not wss://).**
+  ESP-IDF's `esp_http_server` doesn't do TLS termination lightly on these
+  chips (and a self-signed cert would just train users to click through
+  browser warnings — worse for security, not better), so traffic between
+  the phone and the hub is WPA2-encrypted at the Wi-Fi layer only, not
+  additionally at the application layer. On the hub's own AP this is the
+  same protection your keystrokes get on literally any home Wi-Fi router;
+  it is *not* the same guarantee as the double-encrypted, replay-protected
+  hub↔dongle link.
+- **No physical-presence pairing gate.** Unlike hub↔dongle pairing (which
+  needs someone's thumb on the dongle's BOOT button), joining the phone
+  Wi-Fi network only needs the password. If that's not the trust model you
+  want, use a hub variant with a physical keyboard instead — the rest of
+  espkvm's guarantees (documented above) are identical either way.
+
+If your threat model is "attacker in Wi-Fi range of my desk," espkvm Air
+is not the variant to reach for. If it's "convenient input for a home
+lab / demo bench / a room you already control," it's a reasonable and
+honestly-documented trade for the convenience of not needing a physical
+keyboard at all.
+
 ## What espkvm does NOT defend against
 
 - **RF jamming / DoS.** 2.4 GHz is a shared band; anyone can shout over

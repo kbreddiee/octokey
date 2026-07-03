@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<!--
+  espkvm hub-air — phone control surface.
+
+  Talks to the hub over one WebSocket at /ws. Wire format (JSON, both
+  directions — kept here so the protocol and the code that speaks it
+  never drift apart; mirrored in ../webui.c):
+
+    phone -> hub
+      {"t":"hello"}                                  request a fresh slots snapshot
+      {"t":"kbd","m":<u8 mods>,"k":[u8 x up to 6]}    keyboard state (HID usage codes)
+      {"t":"mouse","dx":i16,"dy":i16,"b":u8,"w":i8}   relative move / buttons / wheel
+      {"t":"cons","u":u16}                            consumer usage, 0 = release
+      {"t":"switch","slot":u8}                        make a paired slot active
+      {"t":"pair"} / {"t":"cancel"}                   pairing mode on/off
+      {"t":"unpair","slot":u8}                         forget a slot
+
+    hub -> phone
+      {"t":"slots","active":u8,"pairing":bool,
+       "slots":[{"n":u8,"name":str,"online":bool}, ...]}
+      {"t":"msg","text":str}                          toast
+
+  mods bit layout (matches kvm_proto.h): bit0 LCtrl, bit1 LShift,
+  bit2 LAlt, bit3 LGui/Win, bit4 RCtrl, bit5 RShift, bit6 RAlt, bit7 RGui.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>espkvm</title>
+<style>
+  :root {
+    --bg: #14161c; --panel: #1c1f28; --panel2: #262a36; --edge: #333848;
+    --fg: #e8eaf0; --dim: #8890a4; --accent: #4f8cff; --good: #35c76b;
+    --bad: #ff5a5a; --key: #2a2f3d; --keydn: #4f8cff;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+  html, body { height: 100%; margin: 0; overscroll-behavior: none; touch-action: none; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 15px/1.3 -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    display: flex; flex-direction: column;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 12px; border-bottom: 1px solid var(--edge); flex: none;
+  }
+  header .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); flex: none; }
+  header .dot.on { background: var(--good); }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; flex: 1; }
+  header .hint { font-size: 12px; color: var(--dim); }
+
+  main { flex: 1; min-height: 0; position: relative; }
+  .view { position: absolute; inset: 0; display: none; flex-direction: column; }
+  .view.active { display: flex; }
+
+  /* ---------------- Devices ---------------- */
+  #view-devices { padding: 12px; gap: 10px; overflow-y: auto; }
+  .slot {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--panel); border: 1px solid var(--edge);
+    border-radius: 12px; padding: 12px 14px;
+  }
+  .slot.active { border-color: var(--accent); background: #1c2436; }
+  .slot .num {
+    width: 34px; height: 34px; border-radius: 50%; background: var(--panel2);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; flex: none;
+  }
+  .slot.active .num { background: var(--accent); color: #fff; }
+  .slot .info { flex: 1; min-width: 0; }
+  .slot .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .slot .status { font-size: 12px; color: var(--dim); }
+  .slot .status.online { color: var(--good); }
+  .slot button {
+    background: none; border: none; color: var(--dim); font-size: 20px;
+    padding: 6px 10px; line-height: 1;
+  }
+  #pairBtn {
+    background: var(--accent); color: #fff; border: none; border-radius: 12px;
+    padding: 14px; font-size: 15px; font-weight: 600;
+  }
+  #pairing { display: none; text-align: center; padding: 14px; color: var(--dim); }
+  #pairing button { margin-top: 8px; background: var(--panel2); color: var(--fg); border: 1px solid var(--edge); border-radius: 8px; padding: 8px 16px; }
+  #empty { text-align: center; color: var(--dim); padding: 30px 10px; }
+
+  /* ---------------- Touchpad ---------------- */
+  #view-pad { padding: 10px; gap: 10px; }
+  #pad {
+    flex: 1; background: var(--panel); border: 1px solid var(--edge);
+    border-radius: 14px; position: relative; overflow: hidden;
+  }
+  #pad::after {
+    content: "tap = click   \2022   two fingers = scroll / right-click";
+    position: absolute; bottom: 10px; left: 0; right: 0; text-align: center;
+    color: var(--dim); font-size: 12px; pointer-events: none;
+  }
+  .padrow { display: flex; gap: 8px; flex: none; }
+  .padrow button {
+    flex: 1; background: var(--panel); border: 1px solid var(--edge);
+    color: var(--fg); border-radius: 10px; padding: 12px 0; font-size: 14px;
+  }
+  .padrow button:active, .padrow button.down { background: var(--keydn); border-color: var(--keydn); }
+  .sens { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 12px; flex: none; }
+  .sens input { flex: 1; }
+
+  /* ---------------- Keyboard ---------------- */
+  #view-kbd { padding: 8px; gap: 6px; overflow-y: auto; }
+  .krow { display: flex; gap: 5px; }
+  .key {
+    flex: 1; background: var(--key); border: 1px solid var(--edge);
+    color: var(--fg); border-radius: 8px; padding: 12px 2px;
+    font-size: 13px; text-align: center; min-width: 0;
+  }
+  .key:active, .key.down { background: var(--keydn); border-color: var(--keydn); }
+  .key.wide { flex: 1.7; }
+  .key.space { flex: 6; }
+  .key.small { font-size: 11px; }
+  .krow.media { margin-top: 2px; }
+
+  nav { display: flex; border-top: 1px solid var(--edge); flex: none; }
+  nav button {
+    flex: 1; background: var(--panel); color: var(--dim); border: none;
+    padding: 10px 0 calc(10px + env(safe-area-inset-bottom)); font-size: 12px;
+  }
+  nav button.active { color: var(--accent); }
+  nav button .ic { display: block; font-size: 19px; margin-bottom: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="dot" id="dot"></span>
+  <h1>espkvm</h1>
+  <span class="hint" id="hint">connecting...</span>
+</header>
+
+<main>
+  <section id="view-devices" class="view active">
+    <button id="pairBtn">+ Pair a new dongle</button>
+    <div id="pairing">
+      Pairing mode active on the hub &mdash; press <b>BOOT</b> on the dongle now.
+      <div><button id="cancelPairBtn">Cancel</button></div>
+    </div>
+    <div id="slots"></div>
+    <div id="empty">No dongles paired yet.</div>
+  </section>
+
+  <section id="view-pad" class="view">
+    <div id="pad"></div>
+    <div class="padrow">
+      <button id="btnLeft">Left</button>
+      <button id="btnMid">Middle</button>
+      <button id="btnRight">Right</button>
+    </div>
+    <div class="padrow">
+      <button data-scroll="-3">Scroll ▲</button>
+      <button data-scroll="3">Scroll ▼</button>
+    </div>
+    <div class="sens">
+      <span>slow</span><input type="range" id="sens" min="0.4" max="2.5" step="0.1" value="1.2"><span>fast</span>
+    </div>
+  </section>
+
+  <section id="view-kbd" class="view">
+    <div class="krow">
+      <button class="key small" data-code="29">esc</button>
+      <button class="key small" data-code="3a">F1</button>
+      <button class="key small" data-code="3b">F2</button>
+      <button class="key small" data-code="3c">F3</button>
+      <button class="key small" data-code="3d">F4</button>
+      <button class="key small" data-code="3e">F5</button>
+      <button class="key small" data-code="3f">F6</button>
+      <button class="key small" data-code="40">F7</button>
+      <button class="key small" data-code="41">F8</button>
+      <button class="key small" data-code="42">F9</button>
+      <button class="key small" data-code="43">F10</button>
+      <button class="key small" data-code="44">F11</button>
+      <button class="key small" data-code="45">F12</button>
+    </div>
+    <div class="krow">
+      <button class="key" data-code="35">`</button>
+      <button class="key" data-code="1e">1</button>
+      <button class="key" data-code="1f">2</button>
+      <button class="key" data-code="20">3</button>
+      <button class="key" data-code="21">4</button>
+      <button class="key" data-code="22">5</button>
+      <button class="key" data-code="23">6</button>
+      <button class="key" data-code="24">7</button>
+      <button class="key" data-code="25">8</button>
+      <button class="key" data-code="26">9</button>
+      <button class="key" data-code="27">0</button>
+      <button class="key" data-code="2d">-</button>
+      <button class="key" data-code="2e">=</button>
+      <button class="key wide" data-code="2a">&larr;bksp</button>
+    </div>
+    <div class="krow">
+      <button class="key wide" data-code="2b">tab</button>
+      <button class="key" data-code="14">q</button>
+      <button class="key" data-code="1a">w</button>
+      <button class="key" data-code="08">e</button>
+      <button class="key" data-code="15">r</button>
+      <button class="key" data-code="17">t</button>
+      <button class="key" data-code="1c">y</button>
+      <button class="key" data-code="18">u</button>
+      <button class="key" data-code="0c">i</button>
+      <button class="key" data-code="12">o</button>
+      <button class="key" data-code="13">p</button>
+      <button class="key" data-code="2f">[</button>
+      <button class="key" data-code="30">]</button>
+    </div>
+    <div class="krow">
+      <button class="key wide small" data-code="39">caps</button>
+      <button class="key" data-code="04">a</button>
+      <button class="key" data-code="16">s</button>
+      <button class="key" data-code="07">d</button>
+      <button class="key" data-code="09">f</button>
+      <button class="key" data-code="0a">g</button>
+      <button class="key" data-code="0b">h</button>
+      <button class="key" data-code="0d">j</button>
+      <button class="key" data-code="0e">k</button>
+      <button class="key" data-code="0f">l</button>
+      <button class="key" data-code="33">;</button>
+      <button class="key wide" data-code="28">enter</button>
+    </div>
+    <div class="krow">
+      <button class="key wide small mod" data-mod="2">shift</button>
+      <button class="key" data-code="1d">z</button>
+      <button class="key" data-code="1b">x</button>
+      <button class="key" data-code="06">c</button>
+      <button class="key" data-code="19">v</button>
+      <button class="key" data-code="05">b</button>
+      <button class="key" data-code="11">n</button>
+      <button class="key" data-code="10">m</button>
+      <button class="key" data-code="36">,</button>
+      <button class="key" data-code="37">.</button>
+      <button class="key wide small mod" data-mod="2">shift</button>
+    </div>
+    <div class="krow">
+      <button class="key small mod" data-mod="1">ctrl</button>
+      <button class="key small mod" data-mod="8">win</button>
+      <button class="key small mod" data-mod="4">alt</button>
+      <button class="key space" data-code="2c"></button>
+      <button class="key small mod" data-mod="4">alt</button>
+      <button class="key small" data-code="50">&larr;</button>
+      <button class="key small" data-code="51">&darr;</button>
+      <button class="key small" data-code="52">&uarr;</button>
+      <button class="key small" data-code="4f">&rarr;</button>
+    </div>
+    <div class="krow media">
+      <button class="key small" data-cons="e2">mute</button>
+      <button class="key small" data-cons="ea">vol-</button>
+      <button class="key small" data-cons="e9">vol+</button>
+      <button class="key small" data-cons="b6">|&lt;</button>
+      <button class="key small" data-cons="cd">&#9654;/&#10074;&#10074;</button>
+      <button class="key small" data-cons="b5">&gt;|</button>
+      <button class="key small" data-code="4c">del</button>
+    </div>
+  </section>
+</main>
+
+<nav>
+  <button data-view="devices" class="active"><span class="ic">&#128241;</span>Devices</button>
+  <button data-view="pad"><span class="ic">&#128433;</span>Touchpad</button>
+  <button data-view="kbd"><span class="ic">&#8963;</span>Keyboard</button>
+</nav>
+
+<script>
+'use strict';
+
+/* ---------------- connection ---------------- */
+let ws, connected = false;
+const dot = document.getElementById('dot'), hint = document.getElementById('hint');
+
+function connect() {
+  ws = new WebSocket('ws://' + location.host + '/ws');
+  ws.onopen = () => { connected = true; dot.classList.add('on'); hint.textContent = ''; send({t:'hello'}); };
+  ws.onclose = () => { connected = false; dot.classList.remove('on'); hint.textContent = 'reconnecting...'; setTimeout(connect, 1200); };
+  ws.onerror = () => ws.close();
+  ws.onmessage = (ev) => { try { onServerMsg(JSON.parse(ev.data)); } catch (e) {} };
+}
+function send(o) { if (connected) ws.send(JSON.stringify(o)); }
+connect();
+
+/* ---------------- toasts ---------------- */
+function toast(text) {
+  hint.textContent = text;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { hint.textContent = ''; }, 2500);
+}
+
+/* ---------------- Devices tab ---------------- */
+const slotsEl = document.getElementById('slots');
+const emptyEl = document.getElementById('empty');
+const pairingEl = document.getElementById('pairing');
+
+function onServerMsg(m) {
+  if (m.t === 'slots') renderSlots(m);
+  else if (m.t === 'msg') toast(m.text);
+}
+
+function renderSlots(m) {
+  pairingEl.style.display = m.pairing ? 'block' : 'none';
+  slotsEl.innerHTML = '';
+  emptyEl.style.display = m.slots.length ? 'none' : 'block';
+  for (const s of m.slots) {
+    const row = document.createElement('div');
+    row.className = 'slot' + (s.n === m.active ? ' active' : '');
+    row.innerHTML =
+      '<div class="num">' + s.n + '</div>' +
+      '<div class="info"><div class="name"></div>' +
+      '<div class="status' + (s.online ? ' online' : '') + '">' + (s.online ? 'online' : 'offline') + '</div></div>' +
+      '<button class="forget">&#128465;</button>';
+    row.querySelector('.name').textContent = s.name;
+    row.querySelector('.info').onclick = () => send({t:'switch', slot: s.n});
+    row.querySelector('.forget').onclick = (ev) => {
+      ev.stopPropagation();
+      if (confirm('Forget "' + s.name + '"?')) send({t:'unpair', slot: s.n});
+    };
+    slotsEl.appendChild(row);
+  }
+}
+
+document.getElementById('pairBtn').onclick = () => send({t:'pair'});
+document.getElementById('cancelPairBtn').onclick = () => send({t:'cancel'});
+
+/* ---------------- tab switching ---------------- */
+for (const btn of document.querySelectorAll('nav button')) {
+  btn.onclick = () => {
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('view-' + btn.dataset.view).classList.add('active');
+  };
+}
+
+/* ---------------- Keyboard tab ---------------- */
+let mods = 0;
+const MOD_LABEL = {1:'ctrl', 2:'shift', 4:'alt', 8:'win'};
+
+document.querySelectorAll('.key.mod').forEach(k => {
+  const bit = parseInt(k.dataset.mod, 10);
+  k.addEventListener('click', () => {
+    mods ^= bit;
+    document.querySelectorAll('.key.mod[data-mod="' + bit + '"]').forEach(el => el.classList.toggle('down', !!(mods & bit)));
+    send({t:'kbd', m: mods, k: []});
+  });
+});
+
+document.querySelectorAll('.key[data-code]').forEach(k => {
+  const code = parseInt(k.dataset.code, 16);
+  k.addEventListener('touchstart', (e) => { e.preventDefault(); pressKey(k, code); }, {passive: false});
+  k.addEventListener('mousedown', (e) => { e.preventDefault(); pressKey(k, code); });
+});
+
+function pressKey(el, code) {
+  el.classList.add('down');
+  send({t:'kbd', m: mods, k: [code]});
+  setTimeout(() => {
+    el.classList.remove('down');
+    send({t:'kbd', m: mods, k: []});
+  }, 55);
+}
+
+document.querySelectorAll('.key[data-cons]').forEach(k => {
+  const usage = parseInt(k.dataset.cons, 16);
+  const fire = (e) => {
+    e.preventDefault();
+    k.classList.add('down');
+    send({t:'cons', u: usage});
+    setTimeout(() => { k.classList.remove('down'); send({t:'cons', u: 0}); }, 80);
+  };
+  k.addEventListener('touchstart', fire, {passive: false});
+  k.addEventListener('mousedown', fire);
+});
+
+/* ---------------- Touchpad tab ---------------- */
+const pad = document.getElementById('pad');
+const sens = document.getElementById('sens');
+const pointers = new Map();   // id -> {x,y}
+let gestureMaxPointers = 0, gestureMoved = 0, gestureStart = 0;
+
+function sendMove(dx, dy) {
+  dx = Math.max(-500, Math.min(500, Math.round(dx)));
+  dy = Math.max(-500, Math.min(500, Math.round(dy)));
+  if (dx || dy) send({t:'mouse', dx, dy, b: 0});
+}
+function clickButton(bit) {
+  send({t:'mouse', dx:0, dy:0, b: bit});
+  setTimeout(() => send({t:'mouse', dx:0, dy:0, b: 0}), 60);
+}
+
+pad.addEventListener('pointerdown', (e) => {
+  pad.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
+  if (pointers.size === 1) { gestureStart = Date.now(); gestureMoved = 0; }
+  gestureMaxPointers = Math.max(gestureMaxPointers, pointers.size);
+});
+
+pad.addEventListener('pointermove', (e) => {
+  const p = pointers.get(e.pointerId);
+  if (!p) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y;
+  p.x = e.clientX; p.y = e.clientY;
+  gestureMoved += Math.abs(dx) + Math.abs(dy);
+
+  if (pointers.size === 1) {
+    sendMove(dx * parseFloat(sens.value), dy * parseFloat(sens.value));
+  } else if (pointers.size >= 2 && Math.abs(dy) > 4) {
+    // two-finger vertical drag = scroll
+    send({t:'mouse', dx:0, dy:0, b:0, w: dy > 0 ? 1 : -1});
+  }
+});
+
+/* Tap type is decided once per gesture, when the last finger lifts, from
+ * the peak concurrent touch count seen during the whole gesture — not
+ * from how many fingers happen to still be down at that exact instant
+ * (which would let a two-finger tap fire both a left AND a right click
+ * as the two pointerup events land one after the other). */
+function padUp(e) {
+  pointers.delete(e.pointerId);
+  if (pointers.size === 0) {
+    const elapsed = Date.now() - gestureStart;
+    if (gestureMoved < 14 && elapsed < 350) {
+      clickButton(gestureMaxPointers >= 2 ? 2 : 1);
+    }
+    gestureMaxPointers = 0;
+  }
+}
+pad.addEventListener('pointerup', padUp);
+pad.addEventListener('pointercancel', padUp);
+
+document.getElementById('btnLeft').addEventListener('click', () => clickButton(1));
+document.getElementById('btnRight').addEventListener('click', () => clickButton(2));
+document.getElementById('btnMid').addEventListener('click', () => clickButton(4));
+document.querySelectorAll('[data-scroll]').forEach(b => {
+  b.addEventListener('click', () => send({t:'mouse', dx:0, dy:0, b:0, w: parseInt(b.dataset.scroll, 10)}));
+});
+</script>
+</body>
+</html>

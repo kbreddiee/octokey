@@ -8,6 +8,11 @@ terms below.
 
 **Hub, pick one:**
 
+- **espkvm Air** — no dev board, no wiring, **no physical keyboard at
+  all**: any bare ESP32/S2/S3/C3 (~$3–5) hosts a Wi-Fi network and your
+  phone's browser becomes the keyboard, touchpad and switcher. See
+  [espkvm Air](#espkvm-air-phone-as-the-hub-no-usb-keyboard) below —
+  skip straight there if this is your build.
 - **Custom espkvm hub PCB** — button + 10 slot LEDs, 18650 battery slot,
   built-in USB-A keyboard port; full fab-ready reference design in
   [`hardware/hub-refdesign/`](../hardware/hub-refdesign/README.md)
@@ -16,6 +21,10 @@ terms below.
   ~$29 + $8 splitter cable)
 - DIY DevKitC-1 stack (option B — cheapest, all parts exposed, and the
   recommended bring-up board while custom PCBs are at the fab)
+
+The BOM below is for a **physical-keyboard hub** (custom PCB / T-Embed /
+DevKitC-1). If you're building espkvm Air, skip to its section — all you
+need is one ESP32 board and dongles.
 
 | # | Part | Search term | Qty | ~AliExpress | ~Amazon |
 |---|------|-------------|-----|------------:|--------:|
@@ -52,6 +61,43 @@ images. The S3 image has the T-Dongle-S3's LCD enabled by default
 **ACTIVE** screen when that machine is the selected target, and hub-offline
 / USB warnings. On boards whose only LED is addressable RGB, the plain
 status LED is disabled (`ESPKVM_LED_GPIO=-1`, the S3 default).
+
+## espkvm Air: phone as the hub, no USB keyboard
+
+`firmware/hub-air` is a different hub entirely: it has no USB host, no
+display, no encoder — it's a radio bridge. It hosts a small Wi-Fi network
+and a phone browser becomes the keyboard, touchpad and switcher. Runs on
+whatever bare ESP32 you have lying around; **no wiring, no case, no BOM
+beyond the board itself.**
+
+```sh
+cd firmware/hub-air
+idf.py set-target esp32s3      # or esp32, esp32c3, esp32s2 — any Wi-Fi chip
+idf.py build flash
+```
+
+(or flash `espkvm-hub-air-web.bin` from the web flasher).
+
+1. Power the board (any USB source — a phone charger is fine).
+2. On your phone, join the Wi-Fi network **`espkvm`** (password
+   `espkvm-air` by default — **change both** in `idf.py menuconfig →
+   espkvm hub-air` before you trust this anywhere; see
+   [SECURITY.md](SECURITY.md#espkvm-air-the-phonehub-hop)).
+3. Open **`http://192.168.4.1/`**. Three tabs: **Devices** (pair new
+   dongles, tap a slot to switch), **Touchpad** (drag to move, tap to
+   click, two fingers to scroll/right-click), **Keyboard** (full QWERTY
+   with Ctrl/Alt/Win/Shift as toggles, arrows, media keys).
+
+Pairing dongles works exactly as elsewhere — tap "Pair a new dongle" in
+the Devices tab (same 30 s ESP-NOW beacon window as every other hub),
+then press BOOT on the dongle. Everything downstream of pairing (the
+dongle firmware, the ESP-NOW protocol, replay protection) is identical to
+every other hub variant; only the "top half" — where keystrokes originate
+— is different.
+
+Because there's no USB host, espkvm Air can't provision dongles over USB
+(no `flasher.c` on this variant) — flash new dongles from a PC or another
+hub instead.
 
 ## Hub option A: LILYGO T-Embed (zero wiring)
 

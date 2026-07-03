@@ -56,6 +56,12 @@ between them instantly with a rotary knob or a keyboard chord.
 - **Failsafes everywhere**: hub reboot returns to the last active slot;
   dongles auto-release all keys if the link dies mid-keypress; offline
   slots drop input instead of queueing stale keystrokes.
+- **No physical keyboard? Use espkvm Air.** `firmware/hub-air` turns any
+  bare ESP32 into a Wi-Fi-only hub — your phone's browser becomes a full
+  touch keyboard + touchpad + device switcher. No dev-board wiring, no
+  USB host, no BOM beyond the one chip. Trade-off: the phone↔hub hop is
+  WPA2-only, not the double-encrypted scheme the rest of espkvm uses —
+  [documented honestly](docs/SECURITY.md#espkvm-air-the-phonehub-hop).
 
 ## Quickstart (15 minutes + soldering four wires)
 
@@ -103,10 +109,16 @@ that has an input-select hotkey, or a cheap HDMI switch.
 ## Repo layout
 
 ```
-firmware/hub/     ESP32-S3: USB host HID → hotkey FSM → ESP-NOW TX, OLED+encoder UI
-firmware/dongle/  ESP32-S2: ESP-NOW RX → TinyUSB composite HID (kbd+mouse+media)
-common/           wire protocol (versioned, documented), pairing crypto, HID
-                  report-descriptor parser — all unit-tested on the host
+firmware/hub/     ESP32-S3: USB host HID → hotkey FSM → ESP-NOW TX
+                  (DevKitC-1+OLED, LILYGO T-Embed, or the custom PCB — one
+                  tree, picked via menuconfig; see hardware/hub-refdesign/)
+firmware/hub-air/ any ESP32: Wi-Fi AP + web app → ESP-NOW TX (no USB host,
+                  phone browser is the keyboard/touchpad/switcher)
+firmware/dongle/  ESP32-S2/S3: ESP-NOW RX → TinyUSB composite HID (kbd+mouse+media)
+common/           wire protocol (versioned, documented), pairing crypto,
+                  HID report-descriptor parser, hub-side ESP-NOW/pairing
+                  logic shared by every hub variant — all unit-tested
+hardware/         fab-ready reference PCBs (hub + stick dongle)
 tools/            ESP Web Tools manifest generator + flasher page
 docs/             BUILD (BOM/wiring/flash), PAIRING (user guide), SECURITY (threat model)
 tests/host/       host-runnable unit tests (run in CI)

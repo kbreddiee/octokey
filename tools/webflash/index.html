@@ -20,19 +20,47 @@
 </head>
 <body>
   <h1>espkvm web flasher</h1>
-  <p>Plug the board in via USB, click the button, pick the serial port.</p>
+  <p>Plug the board in via USB, click the button, pick the serial port.
+     Pick <strong>one</strong> hub image below — they're alternatives, not
+     a set to install together.</p>
 
   <section>
-    <h2>Hub (ESP32-S3 DevKitC-1)</h2>
-    <p>Use the port labelled <strong>UART</strong> on the DevKit.</p>
+    <h2>Hub — ESP32-S3 DevKitC-1 (OLED + rotary encoder)</h2>
+    <p>Use the port labelled <strong>UART</strong> on the DevKit. Includes
+       the dongle-provisioning pack (flash dongles later from the hub's
+       USB-A port — see PAIRING.md).</p>
     <esp-web-install-button manifest="manifest-hub.json"></esp-web-install-button>
   </section>
 
   <section>
-    <h2>Dongle (ESP32-S2 Mini)</h2>
+    <h2>Hub — LILYGO T-Embed (built-in screen + knob)</h2>
+    <esp-web-install-button manifest="manifest-hub-tembed.json"></esp-web-install-button>
+  </section>
+
+  <section>
+    <h2>Hub — custom PCB (button + 10 slot LEDs, no display)</h2>
+    <p>See <code>hardware/hub-refdesign/</code>.</p>
+    <esp-web-install-button manifest="manifest-hub-headless.json"></esp-web-install-button>
+  </section>
+
+  <section>
+    <h2>Hub — espkvm Air (Wi-Fi only, phone is the keyboard)</h2>
+    <p>No USB host needed — any ESP32/S2/S3/C3 board with just power.
+       After flashing, join the Wi-Fi network it broadcasts (default SSID
+       <code>espkvm</code>) and open <code>http://192.168.4.1/</code>.</p>
+    <esp-web-install-button manifest="manifest-hub-air.json"></esp-web-install-button>
+  </section>
+
+  <section>
+    <h2>Dongle — ESP32-S2 Mini</h2>
     <p>Hold <strong>0 (BOOT)</strong>, tap <strong>RST</strong>, release
        <strong>0</strong> first — the S2 Mini needs to be in download mode.</p>
     <esp-web-install-button manifest="manifest-dongle.json"></esp-web-install-button>
+  </section>
+
+  <section>
+    <h2>Dongle — LILYGO T-Dongle-S3 / M5Stack AtomS3U (ESP32-S3)</h2>
+    <esp-web-install-button manifest="manifest-dongle-s3.json"></esp-web-install-button>
   </section>
 </body>
 </html>

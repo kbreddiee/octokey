@@ -18,7 +18,18 @@ typedef enum {
  * queue, not block. */
 typedef void (*link_event_cb_t)(link_event_t evt, uint8_t slot);
 
+/* STA-mode init (default): the hub joins no network, it just needs a
+ * Wi-Fi interface up to run ESP-NOW on CONFIG_ESPKVM_CHANNEL. Used by
+ * the USB-host hub variants (DevKit/T-Embed/headless). */
 esp_err_t link_init(link_event_cb_t cb);
+
+/* AP-mode init: the hub also hosts its own Wi-Fi network on `channel`
+ * (open if ap_pass is NULL/empty, else WPA2-PSK — 8-63 chars) so a
+ * phone can join and drive it directly (see firmware/hub-air). ESP-NOW
+ * rides the same radio/channel as the AP; both share one interface. */
+esp_err_t link_init_ap(const char *ap_ssid, const char *ap_pass,
+                       uint8_t channel, uint8_t max_clients,
+                       link_event_cb_t cb);
 
 /* Input forwarding — silently dropped when no slot is active. */
 void link_send_kbd(uint8_t mods, const uint8_t keys[6]);

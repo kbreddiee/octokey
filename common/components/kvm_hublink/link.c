@@ -31,6 +31,7 @@
 #include "esp_wifi.h"
 #include "esp_now.h"
 #include "esp_event.h"
+#include "esp_netif.h"
 #include "esp_timer.h"
 #include "esp_log.h"
 
@@ -38,6 +39,13 @@
 #include "kvm_crypto.h"
 #include "store.h"
 #include "link.h"
+
+/* Set once by link_init()/link_init_ap() before any ESP-NOW peer is
+ * registered: which Wi-Fi interface (STA for a radio-only hub, AP for a
+ * hub that also hosts its own network — see firmware/hub-air) and which
+ * fixed channel every peer + the pairing beacon use. */
+static wifi_interface_t s_ifidx = WIFI_IF_STA;
+static uint8_t s_channel;
 
 static const char *TAG = "link";
 
@@ -101,8 +109,8 @@ static esp_err_t set_peer(const uint8_t mac[6], const uint8_t *lmk)
 
     esp_now_peer_info_t p = {0};
     memcpy(p.peer_addr, mac, 6);
-    p.channel = CONFIG_ESPKVM_CHANNEL;
-    p.ifidx = WIFI_IF_STA;
+    p.channel = s_channel;
+    p.ifidx = s_ifidx;
     if (lmk) {
         p.encrypt = true;
         memcpy(p.lmk, lmk, KVM_KEY_LEN);
@@ -355,7 +363,7 @@ static void pairing_on_req(const link_msg_t *m)
     uint8_t blob[KVM_PAIR_BLOB_LEN];
     memcpy(blob, store_pmk(), KVM_KEY_LEN);
     blob[KVM_KEY_LEN] = slot;
-    blob[KVM_KEY_LEN + 1] = CONFIG_ESPKVM_CHANNEL;
+    blob[KVM_KEY_LEN + 1] = s_channel;
     if (kvm_gcm_seal(kek, c.nonce, blob, sizeof(blob), c.ct, c.tag) != ESP_OK) {
         memset(kek, 0, sizeof(kek));
         return;
@@ -562,7 +570,10 @@ static void link_task(void *arg)
 /* API                                                                */
 /* ------------------------------------------------------------------ */
 
-esp_err_t link_init(link_event_cb_t cb)
+/* Shared tail: ESP-NOW bring-up + pairing table replay + failsafe active
+ * slot + the link task/timers. Called once the Wi-Fi interface named by
+ * s_ifidx is already up on s_channel, by either entry point below. */
+static esp_err_t finish_init(link_event_cb_t cb)
 {
     s_cb = cb;
     s_q = xQueueCreate(24, sizeof(link_msg_t));
@@ -570,16 +581,6 @@ esp_err_t link_init(link_event_cb_t cb)
     if (!s_q || !s_lock) {
         return ESP_ERR_NO_MEM;
     }
-
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_start());
-    ESP_ERROR_CHECK(esp_wifi_set_channel(CONFIG_ESPKVM_CHANNEL,
-                                         WIFI_SECOND_CHAN_NONE));
-    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));   /* latency! */
 
     ESP_ERROR_CHECK(esp_now_init());
     ESP_ERROR_CHECK(esp_now_set_pmk(store_pmk()));
@@ -626,9 +627,64 @@ esp_err_t link_init(link_event_cb_t cb)
     ESP_ERROR_CHECK(esp_timer_create(&beacon_args, &beacon));
     ESP_ERROR_CHECK(esp_timer_start_periodic(beacon, BEACON_PERIOD_MS * 1000));
 
-    ESP_LOGI(TAG, "up on channel %d, active slot %u",
-             CONFIG_ESPKVM_CHANNEL, s_active);
+    ESP_LOGI(TAG, "up on channel %d, active slot %u", s_channel, s_active);
     return ESP_OK;
+}
+
+esp_err_t link_init(link_event_cb_t cb)
+{
+    s_ifidx = WIFI_IF_STA;
+    s_channel = CONFIG_ESPKVM_CHANNEL;
+
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_start());
+    ESP_ERROR_CHECK(esp_wifi_set_channel(s_channel, WIFI_SECOND_CHAN_NONE));
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));   /* latency! */
+
+    return finish_init(cb);
+}
+
+esp_err_t link_init_ap(const char *ap_ssid, const char *ap_pass,
+                       uint8_t channel, uint8_t max_clients,
+                       link_event_cb_t cb)
+{
+    s_ifidx = WIFI_IF_AP;
+    s_channel = channel;
+
+    /* Unlike the STA/ESP-NOW-only path above, an AP that also serves HTTP
+     * needs the lwIP/netif stack up (for its own 192.168.4.1 + DHCP
+     * server) — esp_netif_init() must run before any netif is created. */
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    if (esp_netif_create_default_wifi_ap() == NULL) {
+        return ESP_FAIL;
+    }
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+
+    bool open = (ap_pass == NULL || ap_pass[0] == '\0');
+    wifi_config_t wc = {0};
+    strncpy((char *)wc.ap.ssid, ap_ssid, sizeof(wc.ap.ssid) - 1);
+    wc.ap.ssid_len = strlen(ap_ssid);
+    wc.ap.channel = channel;
+    wc.ap.max_connection = (max_clients > 0 && max_clients <= 10)
+                          ? max_clients : 4;
+    wc.ap.authmode = open ? WIFI_AUTH_OPEN : WIFI_AUTH_WPA2_PSK;
+    if (!open) {
+        strncpy((char *)wc.ap.password, ap_pass, sizeof(wc.ap.password) - 1);
+    }
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wc));
+    ESP_ERROR_CHECK(esp_wifi_start());
+    /* No esp_wifi_set_ps() here: power-save is a STA-only concept: an AP
+     * is always transmitting beacons, so there is nothing to disable. */
+
+    return finish_init(cb);
 }
 
 void link_start_pairing(void)

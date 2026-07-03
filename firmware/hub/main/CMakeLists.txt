@@ -1,4 +1,4 @@
-set(srcs "main.c" "store.c" "link.c" "usb_kbd.c" "input.c" "flasher.c")
+set(srcs "main.c" "usb_kbd.c" "input.c" "flasher.c")
 
 # One UI per board, same interface (ui.h). Display boards share ui.c with
 # a display backend behind the oled.h API; the custom PCB is button+LEDs.
@@ -13,7 +13,7 @@ endif()
 idf_component_register(
     SRCS ${srcs}
     INCLUDE_DIRS "."
-    REQUIRES kvm_proto kvm_crypto kvm_hidparse kvm_font
+    REQUIRES kvm_proto kvm_crypto kvm_hidparse kvm_font kvm_hublink
              nvs_flash esp_wifi esp_event esp_timer driver usb
              esp_partition esp_hw_support
 )

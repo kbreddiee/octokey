@@ -37,6 +37,10 @@ jobs:
             chip_family: ESP32-S3
             path: firmware/hub
             sdkconfig_defaults: "sdkconfig.defaults;sdkconfig.headless"
+          - name: hub-air      # Wi-Fi only: phone browser is the keyboard/mouse/switcher
+            target: esp32s3
+            chip_family: ESP32-S3
+            path: firmware/hub-air
           - name: dongle
             target: esp32s2
             chip_family: ESP32-S2
@@ -131,6 +135,8 @@ jobs:
             dist/espkvm-hub/espkvm-hub-web.bin
             dist/espkvm-hub-tembed/espkvm-hub-tembed-web.bin
             dist/espkvm-hub-headless/espkvm-hub-headless-web.bin
+            dist/espkvm-hub-air/espkvm-hub-air-web.bin
+            dist/espkvm-hub-air/manifest-hub-air.json
             dist/espkvm-dongle/espkvm-dongle-web.bin
             dist/espkvm-dongle/manifest-dongle.json
             dist/espkvm-dongle-s3/espkvm-dongle-s3-web.bin

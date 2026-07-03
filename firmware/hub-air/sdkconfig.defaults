@@ -1,0 +1,19 @@
+# espkvm hub-air — any ESP32/S2/S3/C3 board (Wi-Fi + ESP-NOW only, no USB
+# host needed). Pick a chip with `idf.py set-target esp32s3` (or esp32,
+# esp32c3, esp32s2, ...) before building; nothing here is target-locked.
+
+CONFIG_FREERTOS_HZ=1000
+
+# Latency over size
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+# HKDF for pairing key derivation (off by default in IDF)
+CONFIG_MBEDTLS_HKDF_C=y
+
+# ESP-NOW supports at most 6-7 encrypted peers by default; we need 10
+# dongles + the broadcast pseudo-peer.
+CONFIG_ESP_WIFI_ESPNOW_MAX_ENCRYPT_NUM=14
+
+# Room for the embedded web app + a few JSON messages in flight
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
+CONFIG_HTTPD_WS_SUPPORT=y

@@ -18,6 +18,11 @@ During pairing the two devices perform an ephemeral Diffie–Hellman
 exchange and derive a fresh per-dongle encryption key — nothing secret
 travels over the air. Details in [SECURITY.md](SECURITY.md).
 
+**On espkvm Air** (phone-controlled hub, no physical keyboard): open the
+**Devices** tab in the phone web app and tap **"+ Pair a new dongle"**
+instead of holding an encoder — everything else (BOOT press, 30 s window,
+slot assignment) is identical. See [BUILD.md](BUILD.md#espkvm-air-phone-as-the-hub-no-usb-keyboard).
+
 ## Switching machines
 
 **Encoder:** rotate to move the cursor across paired slots (the bottom
@@ -29,6 +34,10 @@ a digit — `3` jumps to slot 3, `0` to slot 0. `Esc` cancels; so does doing
 nothing for 2 s. The header bar inverts while espkvm is waiting for the
 digit. The chord is intercepted at the hub and **never reaches the target
 machine**; the timing windows are tunable in `menuconfig`.
+
+**On espkvm Air:** tap any slot in the **Devices** tab to switch — that's
+the whole gesture, no hotkey needed since the phone screen is always
+right there.
 
 On every switch the hub sends a *release-all* to the machine you're
 leaving, so a key held during the switch can't stay stuck there. The
