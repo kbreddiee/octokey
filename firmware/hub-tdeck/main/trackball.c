@@ -19,6 +19,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "freertos/FreeRTOS.h"
@@ -105,9 +106,17 @@ static void gesture_task(void *arg)
                 for (uint8_t i = 0; i < left; i++)  tap_arrow(0x50);
                 for (uint8_t i = 0; i < right; i++) tap_arrow(0x4F);
             } else {
-                int16_t dx = (int16_t)(right - left) * STEP;
-                int16_t dy = (int16_t)(down - up) * STEP;
-                link_send_mouse(0, dx, dy, 0, 0);
+                /* Triangular acceleration: 1 pulse/tick stays STEP px,
+                 * fast rolling (n pulses) grows as n(n+1)/2 — slow moves
+                 * keep precision, big swipes cross the screen. The touch
+                 * panel (touch.c) is the smooth pointer; this keeps the
+                 * ball usable as a coarse backup. */
+                int net_x = (int)right - (int)left;
+                int net_y = (int)down - (int)up;
+                int ax = abs(net_x), ay = abs(net_y);
+                int16_t dx = (int16_t)((net_x < 0 ? -1 : 1) * STEP * ax * (ax + 1) / 2);
+                int16_t dy = (int16_t)((net_y < 0 ? -1 : 1) * STEP * ay * (ay + 1) / 2);
+                if (dx || dy) link_send_mouse(0, dx, dy, 0, 0);
             }
         }
 

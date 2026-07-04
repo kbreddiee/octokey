@@ -25,6 +25,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <stdio.h>
 #include <string.h>
 #include <ctype.h>
 
@@ -96,6 +97,27 @@ static int8_t digit_at(uint8_t col, uint8_t row)
     return -1;
 }
 
+/* ALT + top letter row = direct slot switch (q w e r t y u i o p ->
+ * slots 0-9, matching the digits on the dongle/hub screens). Only fires
+ * for slots that actually have a dongle paired — ALT+letter on an empty
+ * slot falls through as a normal Ctrl+letter so browser shortcuts on
+ * unused letters keep working. (col,row) per LAYER_PLAIN. */
+static int8_t slot_at(uint8_t col, uint8_t row)
+{
+    static const struct { uint8_t col, row; int8_t slot; } MAP[] = {
+        {0, 0, 0},  /* q */  {0, 1, 1},  /* w */  {1, 0, 2},  /* e */
+        {2, 0, 3},  /* r */  {2, 2, 4},  /* t */  {3, 2, 5},  /* y */
+        {3, 0, 6},  /* u */  {4, 2, 7},  /* i */  {4, 0, 8},  /* o */
+        {1, 3, 9},  /* p */
+    };
+    for (size_t i = 0; i < sizeof(MAP) / sizeof(MAP[0]); i++) {
+        if (MAP[i].col == col && MAP[i].row == row) {
+            return MAP[i].slot;
+        }
+    }
+    return -1;
+}
+
 /* Standard US HID keyboard-page usage for a resolved ASCII character.
  * Returns 0 (no usage) for anything we don't have a mapping for. */
 static uint8_t ascii_to_hid(char c, bool *needs_shift)
@@ -133,8 +155,14 @@ static uint8_t ascii_to_hid(char c, bool *needs_shift)
 
 /* ------------------------------------------------------------------ */
 
+static i2c_master_bus_handle_t s_bus;
 static i2c_master_dev_handle_t s_dev;
 static bool s_ok;
+static volatile uint8_t s_cur_mods;
+
+i2c_master_bus_handle_t kbd_i2c_bus(void) { return s_bus; }
+
+uint8_t kbd_i2c_mods(void) { return s_cur_mods; }
 
 static bool bit_at(const uint8_t raw[COLS], uint8_t col, uint8_t row)
 {
@@ -232,6 +260,10 @@ static void poll_task(void *arg)
 {
     (void)arg;
     uint8_t raw[COLS] = {0}, prev[COLS] = {0};
+    /* Keys consumed by an ALT+letter slot switch stay masked out of the
+     * report until physically released, so the letter never leaks to
+     * the newly-selected computer as a stray Ctrl+letter. */
+    uint8_t swallow[COLS] = {0};
 
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(POLL_MS));
@@ -260,7 +292,11 @@ static void poll_task(void *arg)
         uint8_t new_col = 0xFF, new_row = 0xFF;
         uint8_t keys[6] = {0};
         uint8_t nkeys = 0;
-        uint8_t mods = alt_down ? MOD_LCTRL : 0;
+        /* Physical Shift is forwarded as a live modifier (not just used
+         * to uppercase letters locally) so Shift+Tab / Shift+arrows /
+         * Shift+click work through the soft keys and touchpad. */
+        uint8_t mods = (alt_down ? MOD_LCTRL : 0) | (shift_down ? MOD_LSHIFT : 0);
+        s_cur_mods = mods;
 
         for (uint8_t col = 0; col < COLS; col++) {
             for (uint8_t row = 0; row < ROWS; row++) {
@@ -269,6 +305,10 @@ static void poll_task(void *arg)
                     (col == 0 && row == 6) || (col == 1 && row == 6) ||
                     (col == 2 && row == 3)) {
                     continue;   /* Symbol / Alt / Mic / Shift x2 */
+                }
+                if ((swallow[col] >> row) & 1) {
+                    if (!down) swallow[col] &= (uint8_t)~(1u << row);
+                    continue;   /* spent on a slot switch, wait for release */
                 }
                 if (down && !bit_at(prev, col, row) && new_col == 0xFF) {
                     new_col = col;
@@ -291,7 +331,19 @@ static void poll_task(void *arg)
         }
 
         if (alt_down && new_col != 0xFF) {
-            s_hk.other_during_hold = true;   /* Alt+key: real Ctrl+key */
+            s_hk.other_during_hold = true;   /* Alt+key: chord or Ctrl+key */
+
+            int8_t sl = slot_at(new_col, new_row);
+            if (sl >= 0 && store_pairing((uint8_t)sl)) {
+                char msg[16];
+                snprintf(msg, sizeof(msg), "-> slot %d", sl);
+                link_switch((uint8_t)sl);    /* releases all keys on the
+                                              * old target internally */
+                disp_toast(msg);
+                swallow[new_col] |= (uint8_t)(1u << new_row);
+                memcpy(prev, raw, COLS);
+                continue;                    /* swallow this report */
+            }
         }
 
         if (!hk_consume_cmd(new_col, new_row)) {
@@ -326,8 +378,7 @@ esp_err_t kbd_i2c_init(void)
         .glitch_ignore_cnt = 7,
         .flags.enable_internal_pullup = true,
     };
-    i2c_master_bus_handle_t bus;
-    esp_err_t err = i2c_new_master_bus(&bus_cfg, &bus);
+    esp_err_t err = i2c_new_master_bus(&bus_cfg, &s_bus);
     if (err != ESP_OK) return err;
 
     i2c_device_config_t dev_cfg = {
@@ -335,7 +386,7 @@ esp_err_t kbd_i2c_init(void)
         .device_address = KB_ADDR,
         .scl_speed_hz = 100000,
     };
-    err = i2c_master_bus_add_device(bus, &dev_cfg, &s_dev);
+    err = i2c_master_bus_add_device(s_bus, &dev_cfg, &s_dev);
     if (err != ESP_OK) return err;
 
     /* Give the C3 co-processor time to boot (LilyGO's own example waits

@@ -119,6 +119,57 @@ static void flush(void)
     esp_lcd_panel_draw_bitmap(s_panel, 0, 0, LCD_W, LCD_H, s_fb);
 }
 
+static void rect_outline(int x, int y, int w, int h, uint16_t color)
+{
+    fill_rect(x, y, w, 1, color);
+    fill_rect(x, y + h - 1, w, 1, color);
+    fill_rect(x, y, 1, h, color);
+    fill_rect(x + w - 1, y, 1, h, color);
+}
+
+/* ------------------------------------------------------------------ */
+/* Soft-key bar: the keys this board's physical keyboard doesn't have.
+ * Drawn along the bottom of the screen; touch.c routes taps here via
+ * disp_softkey_hit(). Usages 0xE0..0xE7 are HID modifiers (Win). */
+
+typedef struct { const char *label; uint8_t usage; } softkey_t;
+
+#define SK_ROWS 2
+#define SK_COLS 6
+#define SK_H    32
+#define SK_TOP  (LCD_H - SK_ROWS * SK_H)
+
+static const softkey_t SK[SK_ROWS][SK_COLS] = {
+    { {"esc", 0x29}, {"tab", 0x2B}, {"win", 0xE3}, {"del", 0x4C}, {"hom", 0x4A}, {"end", 0x4D} },
+    { {"<",   0x50}, {"^",   0x52}, {"v",   0x51}, {">",   0x4F}, {"pgu", 0x4B}, {"pgd", 0x4E} },
+};
+
+static void draw_softkeys(void)
+{
+    for (int r = 0; r < SK_ROWS; r++) {
+        for (int c = 0; c < SK_COLS; c++) {
+            int x0 = c * LCD_W / SK_COLS;
+            int x1 = (c + 1) * LCD_W / SK_COLS;
+            int y0 = SK_TOP + r * SK_H;
+            rect_outline(x0 + 1, y0 + 1, x1 - x0 - 2, SK_H - 2, COL_GREY);
+            int tw = (int)strlen(SK[r][c].label) * 6 * 2 - 2;
+            text(x0 + (x1 - x0 - tw) / 2, y0 + (SK_H - 14) / 2,
+                 SK[r][c].label, 2, COL_WHITE);
+        }
+    }
+}
+
+bool disp_softkey_hit(int x, int y, uint8_t *usage)
+{
+    if (s_state.pairing) return false;      /* bar not drawn while pairing */
+    if (x < 0 || x >= LCD_W || y < SK_TOP || y >= LCD_H) return false;
+    int r = (y - SK_TOP) / SK_H;
+    int c = x * SK_COLS / LCD_W;
+    if (r < 0 || r >= SK_ROWS || c < 0 || c >= SK_COLS) return false;
+    *usage = SK[r][c].usage;
+    return true;
+}
+
 /* ------------------------------------------------------------------ */
 
 static void render(void)
@@ -140,29 +191,37 @@ static void render(void)
     {
         uint8_t active = link_active_slot();
         fill(COL_BLACK);
-        text(10, 10, "espkvm", 2, COL_CYAN);
 
+        /* header */
+        text(8, 6, "espkvm", 2, COL_CYAN);
+        fill_rect(0, 24, LCD_W, 1, COL_GREY);
+
+        /* status area (between header and soft keys) */
         if (active == KVM_SLOT_NONE) {
-            text_center(100, "no dongles paired", 2, COL_GREY);
-            text_center(140, "hold trackball 3s to pair", 1, COL_GREY);
+            text_center(70, "no dongles paired", 2, COL_GREY);
+            text_center(102, "hold trackball 3s to pair", 1, COL_GREY);
+            text_center(120, "touchpad: drag=move tap=click 2-finger=scroll", 1, COL_GREY);
+            text_center(136, "ALT=ctrl  ALT+q..p=switch slot 0-9", 1, COL_GREY);
         } else {
             const hub_pairing_t *p = store_pairing(active);
             char digit[2] = { (char)('0' + (active % 10)), '\0' };
             bool online = link_slot_online(active);
 
-            text(20, 50, digit, 10, online ? COL_GREEN : COL_RED);
-            text(140, 60, p ? p->name : "?", 3, COL_WHITE);
-            text(140, 100, online ? "online" : "OFFLINE", 2,
+            text(24, 46, digit, 9, online ? COL_GREEN : COL_RED);
+            text(120, 56, p ? p->name : "?", 3, COL_WHITE);
+            text(120, 92, online ? "online" : "OFFLINE", 2,
                  online ? COL_GREEN : COL_RED);
+            text_center(130, "ALT=ctrl  ALT+q..p=switch  SYM+ball=arrows", 1, COL_GREY);
         }
 
-        text_center(210, "ALT=ctrl  2xALT+num=switch  SYM+ball=arrows", 1, COL_GREY);
+        draw_softkeys();
     }
 
 out:
+    /* toast banner lives at the top so it never covers the soft keys */
     if (s_state.toast[0] && esp_timer_get_time() < s_state.toast_until_us) {
-        fill_rect(0, LCD_H - 26, LCD_W, 26, COL_CYAN);
-        text_center(LCD_H - 20, s_state.toast, 1, COL_BLACK);
+        fill_rect(0, 0, LCD_W, 26, COL_CYAN);
+        text_center(9, s_state.toast, 1, COL_BLACK);
     }
     flush();
     xSemaphoreGive(s_lock);

@@ -18,9 +18,20 @@
 #pragma once
 
 #include "esp_err.h"
+#include "driver/i2c_master.h"
 
 esp_err_t kbd_i2c_init(void);
 
 /* True while the physical Symbol key is currently held — trackball.c
  * reads this to decide mouse-move vs. arrow-key mode. */
 bool kbd_i2c_symbol_held(void);
+
+/* The board-wide I2C bus (keyboard + GT911 touch share it). Created by
+ * kbd_i2c_init even if the keyboard itself fails to probe; NULL only if
+ * the bus itself couldn't be brought up. touch.c attaches through this. */
+i2c_master_bus_handle_t kbd_i2c_bus(void);
+
+/* HID modifier byte currently held on the physical keyboard (Ctrl from
+ * the remapped ALT, Shift) — merged into soft-key taps by touch.c so
+ * e.g. physical-Shift + on-screen-Tab sends a real Shift+Tab. */
+uint8_t kbd_i2c_mods(void);

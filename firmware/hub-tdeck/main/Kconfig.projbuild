@@ -63,7 +63,11 @@ menu "espkvm hub-tdeck"
             default 9
     endmenu
 
-    menu "Trackball feel"
+    menu "Pointer feel"
+        config ESPKVM_TOUCH_SPEED
+            int "Touchpad cursor speed multiplier"
+            range 1 8
+            default 2
         config ESPKVM_TBALL_STEP
             int "Pixels moved per trackball pulse"
             range 1 20

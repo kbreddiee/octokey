@@ -22,6 +22,7 @@
 #include "link.h"
 #include "disp.h"
 #include "kbd_i2c.h"
+#include "touch.h"
 #include "trackball.h"
 
 static const char *TAG = "main";
@@ -73,6 +74,9 @@ void app_main(void)
     }
     if (kbd_i2c_init() != ESP_OK) {
         ESP_LOGE(TAG, "keyboard co-processor not found — check wiring/power");
+    }
+    if (touch_init() != ESP_OK) {
+        ESP_LOGW(TAG, "touch panel not found — trackball is the only pointer");
     }
     ESP_ERROR_CHECK(trackball_init());
     ESP_ERROR_CHECK(link_init(on_link_event));
