@@ -1,0 +1,62 @@
+menu "espkvm hub-dongle"
+
+    config ESPKVM_CHANNEL
+        int "ESP-NOW / AP Wi-Fi channel (must match the dongles)"
+        range 1 13
+        default 1
+        help
+            hub-dongle hosts its own Wi-Fi network for the phone AND runs
+            ESP-NOW to the other dongles on the same radio, so this single
+            channel is both. Dongles auto-adopt the hub's channel at
+            pairing time, so this only matters if you change it later.
+
+            The AP SSID/password/client-limit options live in the shared
+            kvm_webui component (Component config -> espkvm phone web UI).
+
+    config ESPKVM_LOCAL_NAME
+        string "Display name for the computer this stick is plugged into"
+        default "this PC"
+        help
+            Shown in the phone web UI for the local slot (the machine the
+            hub-dongle itself types into). Rename per machine if you build
+            several images, or just leave it.
+
+    config ESPKVM_BTN_GPIO
+        int "Pairing button GPIO"
+        default 0
+        help
+            The onboard button (BOOT on the LILYGO T-Dongle-S3). Short
+            press: open the hub's 30 s pairing window for a new dongle
+            (same as the phone UI's Pair button). Hold 5 s: factory reset
+            (wipes all pairings + keys, reboots).
+
+    config ESPKVM_LCD
+        bool "ST7735 status LCD (LILYGO T-Dongle-S3)"
+        default y
+        help
+            Drive the T-Dongle-S3's 160x80 LCD: the 0-9 slot bar, the
+            Wi-Fi network + URL for the phone, and USB state. Disable on
+            boards without the panel.
+
+    if ESPKVM_LCD
+        config ESPKVM_LCD_MOSI
+            int "LCD MOSI (SDA) GPIO"
+            default 3
+        config ESPKVM_LCD_SCLK
+            int "LCD SCLK GPIO"
+            default 5
+        config ESPKVM_LCD_CS
+            int "LCD CS GPIO"
+            default 4
+        config ESPKVM_LCD_DC
+            int "LCD D/C GPIO"
+            default 2
+        config ESPKVM_LCD_RST
+            int "LCD RESET GPIO"
+            default 1
+        config ESPKVM_LCD_BL
+            int "LCD backlight GPIO (active low)"
+            default 38
+    endif
+
+endmenu

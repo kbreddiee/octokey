@@ -1,0 +1,9 @@
+## espkvm hub-dongle dependencies.
+## esp_tinyusb is Espressif's official TinyUSB wrapper for ESP-IDF, used
+## by the shared kvm_usbdev component. Declared here (not only in the
+## component) because these projects trim the build to
+## `set(COMPONENTS main)`, and only main's manifest is then guaranteed
+## to be processed by the component manager.
+dependencies:
+  idf: ">=5.2"
+  espressif/esp_tinyusb: "~1.4.4"
