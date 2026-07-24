@@ -45,6 +45,10 @@ jobs:
             target: esp32s3
             chip_family: ESP32-S3
             path: firmware/hub-tdeck
+          - name: hub-dongle   # one stick = hub + dongle; the web installer ships this
+            target: esp32s3
+            chip_family: ESP32-S3
+            path: firmware/hub-dongle
           - name: dongle
             target: esp32s2
             chip_family: ESP32-S2
@@ -69,6 +73,12 @@ jobs:
             cd build &&
             esptool.py --chip ${{ matrix.target }} merge_bin
             -o espkvm-${{ matrix.name }}-web.bin @flash_args
+
+      # esp-idf-ci-action builds inside a container as root, so build/ comes
+      # back owned by root and later steps running as `runner` cannot write
+      # into it.
+      - name: Take ownership of the container-built output
+        run: sudo chown -R "$(id -u):$(id -g)" ${{ matrix.path }}/build
 
       - name: Generate ESP Web Tools manifest
         run: |
@@ -143,6 +153,8 @@ jobs:
             dist/espkvm-hub-air/manifest-hub-air.json
             dist/espkvm-hub-tdeck/espkvm-hub-tdeck-web.bin
             dist/espkvm-hub-tdeck/manifest-hub-tdeck.json
+            dist/espkvm-hub-dongle/espkvm-hub-dongle-web.bin
+            dist/espkvm-hub-dongle/manifest-hub-dongle.json
             dist/espkvm-dongle/espkvm-dongle-web.bin
             dist/espkvm-dongle/manifest-dongle.json
             dist/espkvm-dongle-s3/espkvm-dongle-s3-web.bin

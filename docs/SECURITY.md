@@ -92,7 +92,7 @@ per-dongle keys, same replay protection. The new leg is not:
 - **Confidentiality is exactly WPA2-PSK.** The phone↔hub hop is secured
   by the Wi-Fi password you set (`CONFIG_ESPKVM_AP_PASSWORD`), full stop —
   there is no additional per-session key exchange on top of it the way
-  there is for hub↔dongle. **Change the default password** (`espkvm-air`)
+  there is for hub↔dongle. **Change the default password** (`octokey-air`)
   before relying on this anywhere you don't fully trust the room; treat it
   like a shared house key, not a cryptographic secret.
 - **Anyone with the password can type as you.** Up to

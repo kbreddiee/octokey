@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#ffffff">
+<meta name="color-scheme" content="light">
+<title>OctoKey — flash your dongle</title>
+<link rel="icon" href="./logo-32.png" type="image/png">
+<link rel="apple-touch-icon" href="./logo-180.png">
+<meta property="og:title" content="OctoKey — wireless USB keyboard &amp; mouse for up to 10 machines">
+<meta property="og:description" content="Flash a LILYGO T-Dongle-S3 from your browser and drive any of your computers from your phone.">
+<meta property="og:image" content="https://kbreddiee.github.io/octokey/og-card.png">
+<meta property="og:url" content="https://kbreddiee.github.io/octokey/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="description" content="Flash OctoKey firmware onto a LILYGO T-Dongle-S3 straight from your browser — a wireless USB keyboard &amp; mouse for up to 10 machines, driven from your phone.">
+<style>
+  /* shadcn-style light theme, zinc neutrals + OctoKey crimson, with
+   * schematic trim (dot grid, hairline rules, monospaced labels). */
+  :root {
+    --background: #ffffff;
+    --foreground: #09090b;
+    --card: #ffffff;
+    --muted: #f4f4f5;
+    --muted-2: #e4e4e7;
+    --muted-fg: #71717a;
+    --faint: #a1a1aa;
+    --border: #e4e4e7;
+    --primary: #a91e35;
+    --primary-hover: #8d1a2c;
+    --primary-fg: #fafafa;
+    --primary-soft: #fdf2f4;
+    --primary-line: #f0c9d1;
+    --warn: #b45309;
+    --warn-soft: #fffbeb;
+    --warn-line: #fde68a;
+    --radius: 10px;
+    --radius-sm: 8px;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background-color: var(--background);
+    background-image: radial-gradient(circle, var(--muted-2) 1px, transparent 1px);
+    background-size: 18px 18px;
+    color: var(--foreground);
+    font: 16px/1.6 -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 700px; margin: 0 auto; padding: 36px 20px 64px; }
+  svg { width: 20px; height: 20px; stroke: currentColor; stroke-width: 2; fill: none;
+        stroke-linecap: round; stroke-linejoin: round; vertical-align: -4px; }
+
+  .brand { display: flex; align-items: center; gap: 11px; font-weight: 800;
+           letter-spacing: -.2px; font-size: 19px; }
+  .brand img { width: 40px; height: 40px; flex: none; }
+  .hero { text-align: center; margin: 10px 0 -4px; }
+  .hero img { width: min(320px, 72vw); height: auto; }
+
+  h1 { font-size: clamp(30px, 7vw, 42px); line-height: 1.12; margin: 22px 0 10px;
+       letter-spacing: -1px; font-weight: 800; }
+  .lede { color: var(--muted-fg); font-size: clamp(16px, 4vw, 18px); margin: 0 0 8px; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 22px; margin: 20px 0;
+  }
+  .install { text-align: center; border-color: var(--primary-line); background: var(--primary-soft); }
+  .install h2 { margin: 0 0 4px; font-size: 20px; letter-spacing: -.3px; }
+  .install p { color: var(--muted-fg); margin: 0 0 18px; font-size: 14px; }
+
+  /* ESP Web Tools button skin */
+  esp-web-install-button {
+    --esp-tools-button-color: var(--primary);
+    --esp-tools-button-text-color: #fff;
+  }
+  esp-web-install-button[install-supported] .fallback { display: none; }
+  .ewt-btn {
+    display: inline-flex; align-items: center; gap: 9px;
+    background: var(--primary); color: var(--primary-fg); border: none;
+    border-radius: var(--radius-sm); padding: 14px 26px; font-size: 16px; font-weight: 650;
+    cursor: pointer; font-family: inherit; transition: background .15s, transform .1s;
+  }
+  .ewt-btn:hover { background: var(--primary-hover); }
+  .ewt-btn:active { transform: scale(.98); }
+  .unsupported, .not-allowed {
+    color: var(--warn); font-size: 14px; margin: 8px 0 0; text-align: left;
+    background: var(--warn-soft); border: 1px solid var(--warn-line);
+    border-radius: var(--radius-sm); padding: 12px 14px;
+  }
+
+  h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .09em;
+       color: var(--muted-fg); margin: 0 0 14px; font-weight: 700;
+       font-family: ui-monospace, "SF Mono", Consolas, monospace; }
+  ul.check { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+  ul.check li { display: flex; gap: 12px; align-items: flex-start; }
+  ul.check .ico { color: var(--primary); flex: none; margin-top: 1px; }
+  ul.check b { color: var(--foreground); }
+  ul.check span { color: var(--muted-fg); font-size: 15px; }
+
+  ol.steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: grid; gap: 16px; }
+  ol.steps li { display: flex; gap: 14px; }
+  ol.steps li::before {
+    counter-increment: s; content: counter(s);
+    width: 28px; height: 28px; flex: none; border-radius: 50%;
+    background: var(--primary); color: var(--primary-fg); font-weight: 700; font-size: 14px;
+    display: grid; place-items: center;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  }
+  ol.steps .t { padding-top: 2px; }
+  ol.steps .t b { display: block; }
+  ol.steps .t span { color: var(--muted-fg); font-size: 15px; }
+  kbd {
+    background: var(--muted); border: 1px solid var(--muted-2); border-bottom-width: 2px;
+    border-radius: 5px; padding: 1px 7px; font: 600 13px ui-monospace, Consolas, monospace;
+    color: var(--foreground);
+  }
+  code { background: var(--primary-soft); border: 1px solid var(--primary-line);
+         border-radius: 4px; padding: 1px 6px;
+         font: 13px ui-monospace, Consolas, monospace; color: var(--primary); }
+
+  .note { display: flex; gap: 12px; align-items: flex-start;
+          background: var(--warn-soft); border: 1px solid var(--warn-line);
+          border-radius: var(--radius-sm); padding: 14px 16px;
+          color: #78350f; font-size: 14px; }
+  .note .ico { color: var(--warn); flex: none; margin-top: 2px; }
+  .note b { color: #451a03; }
+
+  footer { color: var(--faint); font-size: 13px; text-align: center; margin-top: 40px;
+           border-top: 1px dashed var(--primary-line); padding-top: 20px; }
+  footer a { color: var(--muted-fg); }
+  a { color: var(--primary); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="brand"><img src="./logo-64.png" alt="" width="40" height="40"> OctoKey</div>
+
+  <div class="hero"><img src="./logo.png" alt="OctoKey — a kraken tearing a keyboard apart"></div>
+
+  <h1>Flash your dongle from the browser</h1>
+  <p class="lede"><b>OctoKey</b> turns a <b>LILYGO T-Dongle-S3</b> into a wireless
+     USB keyboard, mouse &amp; macro runner — one phone drives up to ten machines,
+     with no software to install on any of them.</p>
+
+  <div class="card install">
+    <h2>Install OctoKey</h2>
+    <p>Connect the dongle, then click below. Takes about 30 seconds.</p>
+
+    <esp-web-install-button manifest="./manifest.json">
+      <button slot="activate" class="ewt-btn">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Install OctoKey
+      </button>
+      <p slot="unsupported" class="unsupported">
+        ⚠️ Your browser can’t flash over USB. Open this page in <b>desktop
+        Chrome, Edge or Opera</b> (Web Serial isn’t available in Firefox,
+        Safari, or on phones).
+      </p>
+      <p slot="not-allowed" class="not-allowed">
+        ⚠️ This page must be served over <b>https</b> (or localhost) to access USB.
+      </p>
+    </esp-web-install-button>
+  </div>
+
+  <div class="card">
+    <h3>Before you start</h3>
+    <ul class="check">
+      <li><span class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/></svg></span>
+        <span><b>A desktop computer</b> running Chrome, Edge, or Opera. Flashing
+        uses Web Serial, which phones and other browsers don’t support.</span></li>
+      <li><span class="ico"><svg viewBox="0 0 24 24"><path d="M8 6h8M8 6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2M10 2h4v4h-4z"/></svg></span>
+        <span>A <b>LILYGO T-Dongle-S3</b> and a <b>data</b> USB-C cable (some
+        charge-only cables won’t enumerate).</span></li>
+      <li><span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg></span>
+        <span>Two minutes. This <b>erases</b> the dongle and installs OctoKey fresh.</span></li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>How to flash</h3>
+    <ol class="steps">
+      <li><div class="t"><b>Put the dongle in download mode</b>
+        <span>Unplug it. Press and <b>hold the BOOT button</b>, plug it into USB
+        while still holding, then release after a second. (This is required —
+        once OctoKey is running it becomes a keyboard and hides its serial port.)</span></div></li>
+      <li><div class="t"><b>Click “Install OctoKey”</b>
+        <span>Pick the new serial port in the browser dialog
+        (usually labelled <code>USB Serial</code> or <code>JTAG/serial</code>),
+        then confirm <b>Install</b>.</span></div></li>
+      <li><div class="t"><b>Wait for “done”, then unplug &amp; replug</b>
+        <span>Plug it into the computer you want to control. Its little screen
+        boots up showing the <code>0–9</code> slot bar.</span></div></li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h3>Then, from your phone</h3>
+    <ol class="steps">
+      <li><div class="t"><b>Join the Wi-Fi</b>
+        <span>Network <code>octokey</code>, password <code>octokey-air</code>.</span></div></li>
+      <li><div class="t"><b>Open the control panel</b>
+        <span>Browse to <a href="http://192.168.4.1">http://192.168.4.1</a> —
+        touchpad, keyboard, and saved macro scripts.</span></div></li>
+    </ol>
+  </div>
+
+  <div class="note">
+    <span class="ico"><svg viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+    <span><b>Heads up:</b> OctoKey presents itself as a real USB keyboard and can
+    type into whatever it’s plugged into. Only flash hardware you own, and
+    <b>change the default Wi-Fi password</b> before using it anywhere shared.</span>
+  </div>
+
+  <footer>
+    OctoKey · open-source wireless KVM · flashed locally in your browser — the
+    firmware never leaves your machine.
+  </footer>
+
+</div>
+
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js"></script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+# Publishes the OctoKey web installer (docs/) to GitHub Pages.
+#
+# One-time setup: repo Settings -> Pages -> Source: "GitHub Actions".
+# (Do NOT pick "Deploy from a branch" — this workflow uploads the artifact
+# itself so it can rebuild the firmware first.)
+#
+# The firmware image the page flashes is rebuilt here rather than trusted
+# from the commit, so the site can never offer an image that lags the
+# source it was built from.
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "firmware/hub-dongle/**"
+      - "common/components/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race; a queued one supersedes the running one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build site + firmware
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build hub-dongle firmware (ESP-IDF v5.2)
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.2.2
+          target: esp32s3
+          path: firmware/hub-dongle
+          command: >
+            idf.py build &&
+            cd build &&
+            esptool.py --chip esp32s3 merge_bin
+            -o octokey-hub-dongle.bin @flash_args
+
+      - name: Stage the flashable image
+        run: |
+          mkdir -p docs/firmware
+          cp firmware/hub-dongle/build/octokey-hub-dongle.bin docs/firmware/
+          ls -l docs/firmware/
+
+      - name: Check the manifest points at a real file
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          m = json.load(open('docs/manifest.json'))
+          for build in m['builds']:
+              for part in build['parts']:
+                  p = os.path.join('docs', part['path'])
+                  if not os.path.exists(p):
+                      sys.exit(f'manifest references missing file: {p}')
+                  print(f"ok {part['path']} @ {part['offset']:#x} "
+                        f"({os.path.getsize(p)} bytes)")
+          PY
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    name: deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

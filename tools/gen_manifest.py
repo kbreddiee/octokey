@@ -22,7 +22,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--name", required=True,
                     choices=["hub", "hub-tembed", "hub-headless", "hub-air",
-                             "hub-tdeck", "dongle", "dongle-s3"])
+                             "hub-tdeck", "hub-dongle", "dongle", "dongle-s3"])
     ap.add_argument("--chip", required=True,
                     choices=["ESP32-S2", "ESP32-S3"])
     ap.add_argument("--version", default="dev")
@@ -39,7 +39,7 @@ def main() -> None:
         parts.append({"path": path, "offset": int(offset, 0)})
 
     manifest = {
-        "name": f"espkvm {args.name}",
+        "name": f"OctoKey {args.name}",
         "version": args.version,
         "new_install_prompt_erase": True,
         "builds": [

@@ -1,4 +1,4 @@
-# Building espkvm — parts, wiring, flashing
+# Building OctoKey — parts, wiring, flashing
 
 ## Bill of materials
 
@@ -8,6 +8,11 @@ terms below.
 
 **Hub, pick one:**
 
+- **OctoKey hub-dongle (recommended)** — no dev board, no wiring, no
+  second device: a **LILYGO T-Dongle-S3** (~$12) *is* the hub. It types
+  into the computer it's plugged into over USB, hosts the Wi-Fi network
+  for your phone, and relays to the other sticks over ESP-NOW. See
+  [hub-dongle](#octokey-hub-dongle-one-stick-does-everything) below.
 - **espkvm Air** — no dev board, no wiring, **no physical keyboard at
   all**: any bare ESP32/S2/S3/C3 (~$3–5) hosts a Wi-Fi network and your
   phone's browser becomes the keyboard, touchpad and switcher. See
@@ -66,6 +71,54 @@ images. The S3 image has the T-Dongle-S3's LCD enabled by default
 / USB warnings. On boards whose only LED is addressable RGB, the plain
 status LED is disabled (`ESPKVM_LED_GPIO=-1`, the S3 default).
 
+## OctoKey hub-dongle: one stick does everything
+
+`firmware/hub-dongle` is the build the [web installer](index.html) ships and
+the one most people want. A single **LILYGO T-Dongle-S3** simultaneously:
+
+- enumerates as a USB keyboard + mouse into the computer it's plugged into
+  (the "local slot" — served straight to TinyUSB, no radio hop),
+- hosts the `octokey` Wi-Fi network and serves the phone control panel at
+  `http://192.168.4.1/`,
+- acts as the ESP-NOW hub for every other stick you pair,
+- shows status on its own 160x80 LCD: the 0–9 slot bar (green = active,
+  red = paired, grey = empty), the Wi-Fi name, the URL, and USB state.
+
+**The trade-off:** the whole system runs on this stick's USB power, so plug
+it into the machine that's always on. If that machine sleeps, the Wi-Fi and
+the radio go with it.
+
+### Flashing it
+
+Easiest is the browser installer — desktop Chrome or Edge, no toolchain:
+open `docs/index.html` (or the project's GitHub Pages site), hold **BOOT**
+while plugging the stick in, and click **Install OctoKey**.
+
+From source:
+
+```sh
+idf.py -p <port> flash        # in firmware/hub-dongle
+```
+
+Note that once OctoKey is running the stick is a *pure HID device* and no
+longer exposes a serial port — to reflash, unplug it, hold **BOOT**, plug it
+back in, then release.
+
+### Buttons
+
+- **Short press BOOT** — open the 30 s pairing window for a new stick (same
+  as the web UI's Pair button).
+- **Hold BOOT 5 s** — factory reset: wipes all pairings and keys, reboots.
+
+### Adding the other machines
+
+Flash the remaining sticks with `firmware/dongle` (build for `esp32s3` on a
+T-Dongle-S3), then pair them from the phone UI. The Wi-Fi SSID/password live
+in `idf.py menuconfig → Component config → espkvm phone web UI`; **change
+the password** before using this anywhere shared, and see
+[SECURITY.md](SECURITY.md#espkvm-air-the-phonehub-hop) — the phone↔hub hop
+is WPA2 only.
+
 ## espkvm Air: phone as the hub, no USB keyboard
 
 `firmware/hub-air` is a different hub entirely: it has no USB host, no
@@ -83,11 +136,12 @@ idf.py build flash
 (or flash `espkvm-hub-air-web.bin` from the web flasher).
 
 1. Power the board (any USB source — a phone charger is fine).
-2. On your phone, join the Wi-Fi network **`espkvm`** (password
-   `espkvm-air` by default — **change both** in `idf.py menuconfig →
-   espkvm hub-air` before you trust this anywhere; see
+2. On your phone, join the Wi-Fi network **`octokey`** (password
+   `octokey-air` by default — **change both** in `idf.py menuconfig →
+   Component config → espkvm phone web UI` before you trust this
+   anywhere; see
    [SECURITY.md](SECURITY.md#espkvm-air-the-phonehub-hop)).
-3. Open **`http://192.168.4.1/`**. Three tabs: **Devices** (pair new
+3. Open **`http://192.168.4.1/`**. Five tabs: **Devices** (pair new
    dongles, tap a slot to switch), **Touchpad** (drag to move, tap to
    click, two fingers to scroll/right-click), **Keyboard** (full QWERTY
    with Ctrl/Alt/Win/Shift as toggles, arrows, media keys).
