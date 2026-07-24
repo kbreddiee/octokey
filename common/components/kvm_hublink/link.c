@@ -34,6 +34,7 @@
 #include "esp_netif.h"
 #include "esp_timer.h"
 #include "esp_log.h"
+#include "esp_mac.h"
 
 #include "kvm_proto.h"
 #include "kvm_crypto.h"
@@ -77,6 +78,10 @@ static link_event_cb_t s_cb;
 
 static uint32_t s_seq;                /* monotonic within this boot epoch */
 static uint8_t s_active = KVM_SLOT_NONE;
+
+/* Local slot (hub-dongle): input served by callbacks, not radio. */
+static uint8_t s_local_slot = KVM_SLOT_NONE;
+static link_local_ops_t s_local_ops;
 
 static struct {
     uint8_t fails;
@@ -167,6 +172,40 @@ static void send_cb(const uint8_t *mac, esp_now_send_status_t status)
 /* Sending                                                            */
 /* ------------------------------------------------------------------ */
 
+/* Hand a packet built for the radio to the local slot's callbacks
+ * instead. PING needs no action (liveness comes from ops.online), and
+ * UNPAIR can't reach here (link_unpair refuses the local slot). */
+static void local_dispatch(const void *pkt)
+{
+    const kvm_hdr_t *h = (const kvm_hdr_t *)pkt;
+    switch (h->type) {
+    case KVM_PKT_KEYBOARD: {
+        const kvm_pkt_kbd_t *p = pkt;
+        s_local_ops.kbd(p->mods, p->keys);
+        break;
+    }
+    case KVM_PKT_MOUSE: {
+        const kvm_pkt_mouse_t *p = pkt;
+        s_local_ops.mouse(p->buttons, p->dx, p->dy, p->wheel, p->pan);
+        break;
+    }
+    case KVM_PKT_CONSUMER: {
+        const kvm_pkt_consumer_t *p = pkt;
+        s_local_ops.consumer(p->usage);
+        break;
+    }
+    case KVM_PKT_CONTROL: {
+        const kvm_pkt_control_t *p = pkt;
+        if (p->op == KVM_CTL_RELEASE_ALL) {
+            s_local_ops.release_all();
+        }
+        break;
+    }
+    default:
+        break;
+    }
+}
+
 /* Send an input/control packet to a specific slot. Caller holds s_lock. */
 static void send_to_slot_locked(uint8_t slot, void *pkt, size_t len)
 {
@@ -179,6 +218,10 @@ static void send_to_slot_locked(uint8_t slot, void *pkt, size_t len)
     /* Tell the dongle whether it is the currently-selected target — it
      * shows this on its LCD/LED so you can tell slots apart at a glance. */
     h->flags = (slot == s_active) ? KVM_FLAG_ACTIVE : 0;
+    if (slot == s_local_slot) {
+        local_dispatch(pkt);
+        return;
+    }
     esp_now_send(p->mac, (uint8_t *)pkt, len);
 }
 
@@ -267,6 +310,9 @@ uint8_t link_active_slot(void)
 
 bool link_slot_online(uint8_t slot)
 {
+    if (slot == s_local_slot && s_local_ops.online) {
+        return s_local_ops.online();
+    }
     return slot < KVM_MAX_SLOTS && s_health[slot].online;
 }
 
@@ -445,6 +491,19 @@ static void health_tick(void)
 {
     static uint8_t sweep = 0;
 
+    /* The local slot's health is USB enumeration, not radio ACKs — poll
+     * it here so online/offline transitions still raise LINK_EVT_STATUS. */
+    if (s_local_slot != KVM_SLOT_NONE && s_local_ops.online) {
+        static bool prev_online;
+        bool now = s_local_ops.online();
+        if (now != prev_online) {
+            prev_online = now;
+            if (s_cb) {
+                s_cb(LINK_EVT_STATUS, s_local_slot);
+            }
+        }
+    }
+
     xSemaphoreTake(s_lock, portMAX_DELAY);
     if (s_active != KVM_SLOT_NONE) {
         /* Keepalive for the active slot: also feeds the dongle's
@@ -534,8 +593,8 @@ static void link_task(void *arg)
         case MSG_UNPAIR: {
             uint8_t slot = m.slot;
             const hub_pairing_t *p = store_pairing(slot);
-            if (!p) {
-                break;
+            if (!p || slot == s_local_slot) {
+                break;   /* the hub can't unpair itself */
             }
             /* Best effort: tell the dongle to wipe itself (encrypted, so
              * only the real dongle can act on it), then forget locally. */
@@ -590,10 +649,11 @@ static esp_err_t finish_init(link_event_cb_t cb)
     /* Broadcast pseudo-peer (for pairing beacons; never encrypted). */
     ESP_ERROR_CHECK(set_peer(BCAST, NULL));
 
-    /* Re-register every paired dongle as an encrypted peer. */
+    /* Re-register every paired dongle as an encrypted peer. The local
+     * slot is this board itself — no radio peer to register. */
     for (uint8_t i = 0; i < KVM_MAX_SLOTS; i++) {
         const hub_pairing_t *p = store_pairing(i);
-        if (p) {
+        if (p && i != s_local_slot) {
             ESP_ERROR_CHECK(set_peer(p->mac, p->lmk));
         }
     }
@@ -629,6 +689,43 @@ static esp_err_t finish_init(link_event_cb_t cb)
 
     ESP_LOGI(TAG, "up on channel %d, active slot %u", s_channel, s_active);
     return ESP_OK;
+}
+
+esp_err_t link_set_local(const char *name, const link_local_ops_t *ops)
+{
+    if (!ops || !ops->kbd || !ops->mouse || !ops->consumer ||
+        !ops->release_all) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    /* The local slot's pairing entry uses this board's own MAC as its
+     * identity so the slot survives reboots and re-flashes; the LMK is
+     * all-zeros (never used — nothing is sent over the air to it). */
+    uint8_t mac[6];
+    ESP_ERROR_CHECK(esp_read_mac(mac, ESP_MAC_WIFI_STA));
+
+    uint8_t slot = store_slot_for_mac(mac);
+    if (slot == KVM_SLOT_NONE) {
+        slot = store_free_slot();
+        if (slot == KVM_SLOT_NONE) {
+            return ESP_ERR_NO_MEM;   /* all 10 taken by radio dongles */
+        }
+        uint8_t zero_lmk[KVM_KEY_LEN] = {0};
+        esp_err_t err = store_save_pairing(slot, mac, zero_lmk, name);
+        if (err != ESP_OK) {
+            return err;
+        }
+    }
+
+    s_local_ops = *ops;
+    s_local_slot = slot;
+    ESP_LOGI(TAG, "local slot %u (\"%s\")", slot, name);
+    return ESP_OK;
+}
+
+uint8_t link_local_slot(void)
+{
+    return s_local_slot;
 }
 
 esp_err_t link_init(link_event_cb_t cb)

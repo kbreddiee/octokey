@@ -13,4 +13,8 @@ CONFIG_MBEDTLS_HKDF_C=y
 # dongles + the broadcast pseudo-peer.
 CONFIG_ESP_WIFI_ESPNOW_MAX_ENCRYPT_NUM=14
 
+# Room for the embedded web app + a few JSON messages in flight
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
+CONFIG_HTTPD_WS_SUPPORT=y
+
 CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y

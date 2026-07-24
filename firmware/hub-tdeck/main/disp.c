@@ -66,6 +66,8 @@ static bool s_ok;
 
 static struct {
     bool pairing;
+    bool keys_open;     /* soft-key bar expanded? starts collapsed so the
+                         * bar can't be hit accidentally while mousing */
     int  pair_secs;
     char toast[40];
     int64_t toast_until_us;
@@ -144,8 +146,21 @@ static const softkey_t SK[SK_ROWS][SK_COLS] = {
     { {"<",   0x50}, {"^",   0x52}, {"v",   0x51}, {">",   0x4F}, {"pgu", 0x4B}, {"pgd", 0x4E} },
 };
 
+/* The expand/collapse tab in the bottom-right corner — always visible
+ * (except while pairing) so the bar can be summoned back. */
+#define HANDLE_W 48
+#define HANDLE_H 16
+#define HANDLE_X (LCD_W - HANDLE_W)
+#define HANDLE_Y (s_state.keys_open ? SK_TOP - HANDLE_H - 1 : LCD_H - HANDLE_H)
+
 static void draw_softkeys(void)
 {
+    rect_outline(HANDLE_X, HANDLE_Y, HANDLE_W - 1, HANDLE_H, COL_CYAN);
+    text(HANDLE_X + 5, HANDLE_Y + 5,
+         s_state.keys_open ? "hide v" : "keys ^", 1, COL_CYAN);
+
+    if (!s_state.keys_open) return;
+
     for (int r = 0; r < SK_ROWS; r++) {
         for (int c = 0; c < SK_COLS; c++) {
             int x0 = c * LCD_W / SK_COLS;
@@ -162,6 +177,13 @@ static void draw_softkeys(void)
 bool disp_softkey_hit(int x, int y, uint8_t *usage)
 {
     if (s_state.pairing) return false;      /* bar not drawn while pairing */
+
+    if (x >= HANDLE_X && x < LCD_W && y >= HANDLE_Y && y < HANDLE_Y + HANDLE_H) {
+        *usage = DISP_SOFTKEY_TOGGLE;
+        return true;
+    }
+    if (!s_state.keys_open) return false;   /* collapsed: all trackpad */
+
     if (x < 0 || x >= LCD_W || y < SK_TOP || y >= LCD_H) return false;
     int r = (y - SK_TOP) / SK_H;
     int c = x * SK_COLS / LCD_W;
@@ -170,7 +192,30 @@ bool disp_softkey_hit(int x, int y, uint8_t *usage)
     return true;
 }
 
+void disp_softkeys_toggle(void)
+{
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    s_state.keys_open = !s_state.keys_open;
+    xSemaphoreGive(s_lock);
+}
+
 /* ------------------------------------------------------------------ */
+/* Slot bar: digits 0-9 across the top of the header. Green = active
+ * slot, red = paired but not active, grey = nothing paired there. */
+
+static void draw_slotbar(uint8_t active)
+{
+    const int cell = 23;                        /* 10 cells right-aligned */
+    const int x0 = LCD_W - KVM_MAX_SLOTS * cell;
+    for (int i = 0; i < KVM_MAX_SLOTS; i++) {
+        const hub_pairing_t *p = store_pairing(i);
+        uint16_t col = !p          ? COL_GREY
+                     : i == active ? COL_GREEN
+                                   : COL_RED;
+        char d[2] = { (char)('0' + i), '\0' };
+        text(x0 + i * cell + (cell - 10) / 2, 6, d, 2, col);
+    }
+}
 
 static void render(void)
 {
@@ -193,7 +238,8 @@ static void render(void)
         fill(COL_BLACK);
 
         /* header */
-        text(8, 6, "espkvm", 2, COL_CYAN);
+        text(8, 6, "espkvm", 1, COL_CYAN);
+        draw_slotbar(active);
         fill_rect(0, 24, LCD_W, 1, COL_GREY);
 
         /* status area (between header and soft keys) */
@@ -202,6 +248,7 @@ static void render(void)
             text_center(102, "hold trackball 3s to pair", 1, COL_GREY);
             text_center(120, "touchpad: drag=move tap=click 2-finger=scroll", 1, COL_GREY);
             text_center(136, "ALT=ctrl  ALT+q..p=switch slot 0-9", 1, COL_GREY);
+            text_center(156, "phone: wifi " CONFIG_ESPKVM_AP_SSID " -> http://192.168.4.1", 1, COL_CYAN);
         } else {
             const hub_pairing_t *p = store_pairing(active);
             char digit[2] = { (char)('0' + (active % 10)), '\0' };
@@ -212,6 +259,7 @@ static void render(void)
             text(120, 92, online ? "online" : "OFFLINE", 2,
                  online ? COL_GREEN : COL_RED);
             text_center(130, "ALT=ctrl  ALT+q..p=switch  SYM+ball=arrows", 1, COL_GREY);
+            text_center(150, "phone: wifi " CONFIG_ESPKVM_AP_SSID " -> http://192.168.4.1", 1, COL_GREY);
         }
 
         draw_softkeys();

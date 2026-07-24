@@ -1,0 +1,23 @@
+menu "espkvm phone web UI (kvm_webui)"
+
+    config ESPKVM_AP_SSID
+        string "Wi-Fi network name (SSID) the hub broadcasts"
+        default "octokey"
+
+    config ESPKVM_AP_PASSWORD
+        string "Wi-Fi password (min 8 chars, blank = open network)"
+        default "octokey-air"
+        help
+            This password is the ONLY thing standing between your phone's
+            keystrokes and anyone else in range — unlike the hub<->dongle
+            link (unique ephemeral keys per dongle), the phone<->hub hop
+            is only as secure as ordinary WPA2. CHANGE THIS DEFAULT before
+            relying on it anywhere you don't fully trust the room. See
+            docs/SECURITY.md.
+
+    config ESPKVM_AP_MAX_CLIENTS
+        int "Max simultaneous phone connections"
+        range 1 4
+        default 2
+
+endmenu

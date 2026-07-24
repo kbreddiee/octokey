@@ -1,16 +1,16 @@
 /*
- * espkvm hub-air — phone web UI.
+ * espkvm — phone web UI (shared by hub-air and hub-tdeck).
  *
  * One ESP-IDF HTTP server does two jobs:
  *   GET /    serves the single-page app embedded into the firmware image
- *            (main/web/index.html, pulled in via EMBED_TXTFILES — no
- *            SPIFFS partition, it just lives in .rodata).
+ *            (web/index.html, pulled in via EMBED_TXTFILES — no SPIFFS
+ *            partition, it just lives in .rodata).
  *   /ws      a WebSocket carrying small JSON messages both ways. Input
  *            events (keyboard/mouse/consumer) flow phone -> hub and are
  *            handed straight to kvm_hublink's link_send_*(); slot state
  *            flows hub -> phone whenever kvm_hublink reports an event.
  *
- * Wire format is documented at the top of main/web/index.html next to the
+ * Wire format is documented at the top of web/index.html next to the
  * JS that speaks it, so the two stay next to each other in one glance.
  *
  * SPDX-License-Identifier: MIT
@@ -31,6 +31,8 @@ static const char *TAG = "webui";
 
 extern const uint8_t index_html_start[] asm("_binary_index_html_start");
 extern const uint8_t index_html_end[]   asm("_binary_index_html_end");
+extern const uint8_t logo_png_start[]   asm("_binary_logo_png_start");
+extern const uint8_t logo_png_end[]     asm("_binary_logo_png_end");
 
 static httpd_handle_t s_server;
 
@@ -204,6 +206,16 @@ static esp_err_t index_handler(httpd_req_t *req)
                            index_html_end - index_html_start);
 }
 
+/* The app icon, served as its own file so the page stays readable and the
+ * phone caches it instead of re-downloading it with every reload. */
+static esp_err_t logo_handler(httpd_req_t *req)
+{
+    httpd_resp_set_type(req, "image/png");
+    httpd_resp_set_hdr(req, "Cache-Control", "public, max-age=86400");
+    return httpd_resp_send(req, (const char *)logo_png_start,
+                           logo_png_end - logo_png_start);
+}
+
 static esp_err_t ws_handler(httpd_req_t *req)
 {
     if (req->method == HTTP_GET) {
@@ -247,11 +259,15 @@ esp_err_t webui_init(void)
     const httpd_uri_t index_uri = {
         .uri = "/", .method = HTTP_GET, .handler = index_handler,
     };
+    const httpd_uri_t logo_uri = {
+        .uri = "/logo.png", .method = HTTP_GET, .handler = logo_handler,
+    };
     const httpd_uri_t ws_uri = {
         .uri = "/ws", .method = HTTP_GET, .handler = ws_handler,
         .is_websocket = true,
     };
     httpd_register_uri_handler(s_server, &index_uri);
+    httpd_register_uri_handler(s_server, &logo_uri);
     httpd_register_uri_handler(s_server, &ws_uri);
 
     ESP_LOGI(TAG, "web UI up: connect to Wi-Fi \"%s\" then browse to "

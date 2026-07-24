@@ -1,4 +1,4 @@
-/* espkvm hub-air — phone web UI: HTTP + WebSocket bridge to kvm_hublink. */
+/* espkvm — phone web UI: HTTP + WebSocket bridge to kvm_hublink. */
 /* SPDX-License-Identifier: MIT */
 #pragma once
 

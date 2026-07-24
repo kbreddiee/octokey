@@ -151,7 +151,11 @@ static void touch_task(void *arg)
                     /* soft-key gesture: fire on release unless the
                      * finger wandered off the bar (= cancelled) */
                     if (!moved && (now - t_start) < 600 * 1000) {
-                        tap_key(sk_usage);
+                        if (sk_usage == DISP_SOFTKEY_TOGGLE) {
+                            disp_softkeys_toggle();
+                        } else {
+                            tap_key(sk_usage);
+                        }
                     }
                 } else if (!moved && (now - t_start) < (int64_t)TAP_MAX_MS * 1000) {
                     tap_buttons(max_fingers >= 2 ? 0x02 : 0x01);

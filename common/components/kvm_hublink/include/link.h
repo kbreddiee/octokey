@@ -31,6 +31,26 @@ esp_err_t link_init_ap(const char *ap_ssid, const char *ap_pass,
                        uint8_t channel, uint8_t max_clients,
                        link_event_cb_t cb);
 
+/* Local slot: this hub board IS one of the computers' HID devices (see
+ * firmware/hub-dongle — a dongle that doubles as the hub). Input for the
+ * local slot is handed to these callbacks instead of ESP-NOW; `online`
+ * feeds link_slot_online (e.g. usb_dev_mounted). Call after store_init()
+ * and BEFORE link_init*() so the pairing-table entry and peer setup are
+ * consistent. The slot is self-assigned: an existing entry carrying this
+ * board's MAC is reused, otherwise the lowest free slot is claimed and
+ * persisted under `name`. */
+typedef struct {
+    void (*kbd)(uint8_t mods, const uint8_t keys[6]);
+    void (*mouse)(uint8_t buttons, int16_t dx, int16_t dy,
+                  int8_t wheel, int8_t pan);
+    void (*consumer)(uint16_t usage);
+    void (*release_all)(void);
+    bool (*online)(void);
+} link_local_ops_t;
+
+esp_err_t link_set_local(const char *name, const link_local_ops_t *ops);
+uint8_t link_local_slot(void);           /* KVM_SLOT_NONE if not set     */
+
 /* Input forwarding — silently dropped when no slot is active. */
 void link_send_kbd(uint8_t mods, const uint8_t keys[6]);
 void link_send_mouse(uint8_t buttons, int16_t dx, int16_t dy,

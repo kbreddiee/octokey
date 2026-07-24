@@ -11,24 +11,7 @@ menu "espkvm hub-air"
             dongle you pair (dongles auto-adopt the hub's channel at
             pairing time, so this only matters if you change it later).
 
-    config ESPKVM_AP_SSID
-        string "Wi-Fi network name (SSID) the hub broadcasts"
-        default "espkvm"
-
-    config ESPKVM_AP_PASSWORD
-        string "Wi-Fi password (min 8 chars, blank = open network)"
-        default "espkvm-air"
-        help
-            This password is the ONLY thing standing between your phone's
-            keystrokes and anyone else in range — unlike the hub<->dongle
-            link (unique ephemeral keys per dongle), the phone<->hub hop
-            is only as secure as ordinary WPA2. CHANGE THIS DEFAULT before
-            relying on it anywhere you don't fully trust the room. See
-            docs/SECURITY.md.
-
-    config ESPKVM_AP_MAX_CLIENTS
-        int "Max simultaneous phone connections"
-        range 1 4
-        default 2
+            The AP SSID/password/client-limit options moved to the shared
+            kvm_webui component (Component config -> espkvm phone web UI).
 
 endmenu

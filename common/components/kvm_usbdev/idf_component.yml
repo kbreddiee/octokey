@@ -1,0 +1,7 @@
+## espkvm USB HID device (shared by dongle and hub-dongle).
+## esp_tinyusb is Espressif's official TinyUSB wrapper for ESP-IDF (the
+## device-role USB stack for the S2/S3) — the only dependency beyond
+## ESP-IDF built-ins.
+dependencies:
+  idf: ">=5.2"
+  espressif/esp_tinyusb: "~1.4.4"

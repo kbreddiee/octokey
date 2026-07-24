@@ -302,13 +302,19 @@ int kvm_hidp_parse(const uint8_t *desc, size_t len, kvm_hidp_map_t *map)
             break;
 
         case 0:   /* MAIN */
-            if (!p.cur && !map->use_ids) {
-                /* Interfaces without report IDs get a single implicit
-                 * report with id 0, created lazily. */
-                p.cur = find_or_add_report(map, 0);
-            }
             switch (tag) {
             case 8:   /* INPUT */
+                if (!p.cur && !map->use_ids) {
+                    /* Interfaces without report IDs get a single implicit
+                     * report with id 0, created lazily.
+                     *
+                     * This has to hang off INPUT rather than any MAIN item:
+                     * descriptors open their Collection *before* declaring
+                     * Report ID, so keying it on collections would mint a
+                     * phantom id-0 report for every descriptor that uses
+                     * IDs at all. */
+                    p.cur = find_or_add_report(map, 0);
+                }
                 process_input(&p, uval);
                 break;
             case 9:   /* OUTPUT (e.g. keyboard LEDs) — separate bit space */

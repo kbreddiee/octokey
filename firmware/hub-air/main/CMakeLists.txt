@@ -1,7 +1,6 @@
 idf_component_register(
-    SRCS "main.c" "webui.c"
+    SRCS "main.c"
     INCLUDE_DIRS "."
-    EMBED_TXTFILES "web/index.html"
-    REQUIRES kvm_proto kvm_crypto kvm_hublink
-             nvs_flash esp_wifi esp_event esp_netif esp_http_server json
+    REQUIRES kvm_proto kvm_crypto kvm_hublink kvm_webui
+             nvs_flash esp_wifi esp_event esp_netif
 )

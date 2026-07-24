@@ -7,6 +7,10 @@
  * physical keyboard has no Ctrl/Alt/Win/arrows/Esc/Tab/F-keys, worked
  * around with remaps documented there and in docs/BUILD.md).
  *
+ * It also hosts the same Wi-Fi AP + phone web UI as hub-air (shared
+ * kvm_webui component): join CONFIG_ESPKVM_AP_SSID and browse to
+ * http://192.168.4.1/ to type/mouse/switch from a phone as well.
+ *
  * SPDX-License-Identifier: MIT
  */
 
@@ -20,6 +24,7 @@
 #include "kvm_proto.h"
 #include "store.h"
 #include "link.h"
+#include "webui.h"
 #include "disp.h"
 #include "kbd_i2c.h"
 #include "touch.h"
@@ -29,6 +34,8 @@ static const char *TAG = "main";
 
 static void on_link_event(link_event_t evt, uint8_t slot)
 {
+    webui_link_event(evt, slot);   /* keep connected phones in sync */
+
     switch (evt) {
     case LINK_EVT_PAIRED: {
         const hub_pairing_t *p = store_pairing(slot);
@@ -79,7 +86,13 @@ void app_main(void)
         ESP_LOGW(TAG, "touch panel not found — trackball is the only pointer");
     }
     ESP_ERROR_CHECK(trackball_init());
-    ESP_ERROR_CHECK(link_init(on_link_event));
+    ESP_ERROR_CHECK(link_init_ap(CONFIG_ESPKVM_AP_SSID,
+                                 CONFIG_ESPKVM_AP_PASSWORD,
+                                 CONFIG_ESPKVM_CHANNEL,
+                                 CONFIG_ESPKVM_AP_MAX_CLIENTS,
+                                 on_link_event));
+    ESP_ERROR_CHECK(webui_init());
 
-    ESP_LOGI(TAG, "espkvm hub-tdeck ready (active slot %u)", link_active_slot());
+    ESP_LOGI(TAG, "espkvm hub-tdeck ready — Wi-Fi \"%s\", active slot %u",
+             CONFIG_ESPKVM_AP_SSID, link_active_slot());
 }
